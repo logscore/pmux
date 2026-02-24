@@ -17,6 +17,7 @@ type Route struct {
 	TLS        bool      `json:"tls"`                   // serve this route over HTTPS
 	Command    string    `json:"command"`
 	PID        int       `json:"pid"`
+	LogFile    string    `json:"log_file,omitempty"` // stdout/stderr log for detached processes
 	Created    time.Time `json:"created"`
 }
 

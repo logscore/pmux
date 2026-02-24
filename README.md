@@ -23,19 +23,29 @@ No dnsmasq, no Caddy, no Nginx. Just `pmux`.
 
 ## Install
 
+### Quick install (recommended)
+
+Downloads the latest pre-built binary for your platform:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/logscore/pmux/master/install.sh | bash
+```
+
+Or install a specific version:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/logscore/pmux/master/install.sh | bash -s v1.0.0
+```
+
+### Build from source
+
 Requires Go 1.21+.
 
 ```bash
-git clone https://github.com/anomalyco/pmux.git
+git clone https://github.com/logscore/pmux.git
 cd pmux
 make build
-mv pmux /usr/local/bin/
-```
-
-### Cross-compile
-
-```bash
-make cross
+sudo mv dist/pmux /usr/local/bin/
 ```
 
 ## Usage

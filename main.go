@@ -14,12 +14,14 @@ Usage:
   pmux run "<command>" [flags]   Run command with auto port/domain
   pmux list                      List active tunnels
   pmux stop <domain>             Stop a specific tunnel
+  pmux logs <domain>             Tail logs for a detached process
   pmux proxy start [flags]       Start the proxy daemon
   pmux proxy run [flags]         Run the proxy in the foreground
   pmux proxy stop                Stop the proxy daemon
   pmux teardown [flags]          Stop everything and clean up
 
 Run flags:
+  -d, --detach     Run in the background (detached mode)
   --port <n>       Start scanning from this port (default: 3000)
   --name <name>    Override subdomain name
   --tls            Enable HTTPS for this server

@@ -32,19 +32,11 @@ func Generate(nameOverride string) (string, error) {
 	return sanitize(sub) + "." + root + ".test", nil
 }
 
-// rootDomain returns the project name. For git worktrees, it uses the
-// main repo directory name so all worktrees share the same root domain.
-// Falls back to the current directory name.
+// rootDomain returns the project name from the git worktree root directory.
+// Falls back to the current directory name if not in a git repo.
 func rootDomain() (string, error) {
-	if out, err := exec.Command("git", "rev-parse", "--git-common-dir").Output(); err == nil {
-		gitDir := strings.TrimSpace(string(out))
-		if gitDir != ".git" {
-			// Worktree: gitDir is like "/path/to/my-app/.git"
-			parent := filepath.Base(filepath.Dir(gitDir))
-			if parent != "." && parent != "/" {
-				return sanitize(parent), nil
-			}
-		}
+	if out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output(); err == nil {
+		return sanitize(filepath.Base(strings.TrimSpace(string(out)))), nil
 	}
 
 	dir, err := os.Getwd()

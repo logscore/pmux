@@ -3,6 +3,9 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/logscore/pmux/internal/domain"
@@ -18,6 +21,12 @@ type RunOptions struct {
 	StartPort int
 	Name      string
 	TLS       bool
+	Detach    bool
+}
+
+// LogsDir returns the path to the logs directory.
+func LogsDir(configDir string) string {
+	return filepath.Join(configDir, "logs")
 }
 
 func Run(opts RunOptions) error {
@@ -92,15 +101,68 @@ func Run(opts RunOptions) error {
 
 	store := config.NewStore(paths.RoutesFile)
 
-	fmt.Printf("port assigned: %d\n", assignedPort)
-	fmt.Printf("domain: %s\n", dom)
-	fmt.Printf("proxy configured\n")
-
 	scheme := "http"
 	if opts.TLS {
 		scheme = "https"
 	}
+
+	// Detached mode: re-exec ourselves without -d, in a new session with log output
+	if opts.Detach {
+		return runDetached(opts, paths, dom, assignedPort, scheme)
+	}
+
+	fmt.Printf("port assigned: %d\n", assignedPort)
+	fmt.Printf("domain: %s\n", dom)
+	fmt.Printf("proxy configured\n")
 	fmt.Fprintf(os.Stdout, "\nRunning at: %s://%s\n\n", scheme, dom)
 
-	return process.Run(opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir)
+	return process.Run(opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir, "")
+}
+
+func runDetached(opts RunOptions, paths platform.Paths, dom string, assignedPort int, scheme string) error {
+	logsDir := LogsDir(paths.ConfigDir)
+	if err := os.MkdirAll(logsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create logs dir: %w", err)
+	}
+
+	logPath := filepath.Join(logsDir, dom+".log")
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("failed to create log file: %w", err)
+	}
+	defer logFile.Close()
+
+	// Re-exec: pmux run "<command>" [flags] (without --detach/-d)
+	exePath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("failed to find executable: %w", err)
+	}
+
+	args := []string{"run", opts.Command}
+	args = append(args, "--port", fmt.Sprintf("%d", assignedPort))
+	if opts.Name != "" {
+		args = append(args, "--name", opts.Name)
+	}
+	if opts.TLS {
+		args = append(args, "--tls")
+	}
+	// Pass the log file path so the child can record it in the route
+	args = append(args, "--log-file", logPath)
+
+	cmd := exec.Command(exePath, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.Stdin = nil
+
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("failed to start detached process: %w", err)
+	}
+
+	fmt.Printf("port assigned: %d\n", assignedPort)
+	fmt.Printf("domain: %s\n", dom)
+	fmt.Printf("logs: %s\n", logPath)
+	fmt.Fprintf(os.Stdout, "\nRunning (detached) at: %s://%s  [pid %d]\n", scheme, dom, cmd.Process.Pid)
+
+	return nil
 }
