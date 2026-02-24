@@ -44,8 +44,8 @@ func Run(opts RunOptions) error {
 		if err := ProxyStart(ProxyOptions{HTTPPort: 80, TLS: true, HTTPSPort: 443}); err != nil {
 			return fmt.Errorf("failed to start proxy: %w", err)
 		}
-		for i := 0; i < 20; i++ {
-			time.Sleep(100 * time.Millisecond)
+		for i := 0; i < proxy.ProxyStartRetries; i++ {
+			time.Sleep(proxy.ProxyStartRetryInterval)
 			if proxy.IsRunning(paths.ConfigDir) {
 				break
 			}

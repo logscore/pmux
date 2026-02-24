@@ -84,7 +84,15 @@ func Run(cmdStr string, port int, domain string, tlsEnabled bool, store *config.
 	case sig := <-sigChan:
 		fmt.Printf("\nReceived %v, cleaning up...\n", sig)
 		_ = cmd.Process.Signal(sig)
-		<-done
+
+		// If a second signal arrives during cleanup, force-kill the process
+		select {
+		case <-sigChan:
+			fmt.Println("\nForce killing process...")
+			_ = cmd.Process.Kill()
+			<-done
+		case <-done:
+		}
 		return nil
 
 	case err := <-done:

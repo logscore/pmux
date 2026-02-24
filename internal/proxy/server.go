@@ -1,11 +1,10 @@
 package proxy
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
-
 	"fmt"
-	pmuxdns "github.com/logscore/pmux/internal/dns"
 	"io"
 	"log"
 	"net"
@@ -18,6 +17,21 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	pmuxdns "github.com/logscore/pmux/internal/dns"
+)
+
+const (
+	// routePollInterval is how often the routes file is checked for changes.
+	routePollInterval = 500 * time.Millisecond
+	// tcpDialTimeout is the timeout for dialing upstream TCP connections.
+	tcpDialTimeout = 5 * time.Second
+	// ProxyStartRetries is the max number of retries when waiting for the proxy to start.
+	ProxyStartRetries = 20
+	// ProxyStartRetryInterval is the delay between proxy start retries.
+	ProxyStartRetryInterval = 100 * time.Millisecond
+	// shutdownTimeout is the max time allowed for graceful shutdown.
+	shutdownTimeout = 10 * time.Second
 )
 
 // Route is the in-memory representation of a proxy route.
@@ -105,6 +119,7 @@ func (s *Server) Run() error {
 		tlsConfig, err := s.buildTLSConfig()
 		if err != nil {
 			log.Printf("warning: TLS setup failed: %v (HTTPS disabled)", err)
+			s.tlsEnabled = false
 		} else {
 			s.httpsServer = &http.Server{
 				Addr:      s.httpsAddr,
@@ -157,11 +172,18 @@ func (s *Server) shutdown() error {
 	}
 	s.mu.Unlock()
 
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
 	if s.httpServer != nil {
-		s.httpServer.Close()
+		if err := s.httpServer.Shutdown(ctx); err != nil {
+			s.httpServer.Close()
+		}
 	}
 	if s.httpsServer != nil {
-		s.httpsServer.Close()
+		if err := s.httpsServer.Shutdown(ctx); err != nil {
+			s.httpsServer.Close()
+		}
 	}
 	return nil
 }
@@ -212,18 +234,19 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 // startTCPListeners starts a TCP listener for each tcp-type route.
 func (s *Server) startTCPListeners() {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	for _, route := range s.routes {
 		if route.Type != "tcp" {
 			continue
 		}
-		s.startTCPListener(route)
+		s.startTCPListenerLocked(route)
 	}
 }
 
-func (s *Server) startTCPListener(route Route) {
+// startTCPListenerLocked starts a single TCP listener. Caller must hold s.mu.
+func (s *Server) startTCPListenerLocked(route Route) {
 	if route.ListenPort == 0 {
 		log.Printf("tcp proxy: skipping %s (no listen_port configured)", route.Domain)
 		return
@@ -260,17 +283,32 @@ func (s *Server) startTCPListener(route Route) {
 func (s *Server) handleTCP(src net.Conn, targetPort int) {
 	defer src.Close()
 
-	dst, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", targetPort), 5*time.Second)
+	dst, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", targetPort), tcpDialTimeout)
 	if err != nil {
 		log.Printf("tcp proxy: dial failed: %v", err)
 		return
 	}
 	defer dst.Close()
 
-	done := make(chan struct{}, 2)
-	go func() { io.Copy(dst, src); done <- struct{}{} }()
-	go func() { io.Copy(src, dst); done <- struct{}{} }()
-	<-done
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		io.Copy(dst, src)
+		// Signal dst that no more data is coming from src
+		if tc, ok := dst.(*net.TCPConn); ok {
+			tc.CloseWrite()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		io.Copy(src, dst)
+		// Signal src that no more data is coming from dst
+		if tc, ok := src.(*net.TCPConn); ok {
+			tc.CloseWrite()
+		}
+	}()
+	wg.Wait()
 }
 
 // loadRoutes reads routes from the routes.json file.
@@ -310,7 +348,7 @@ func (s *Server) watchRoutes() {
 	var lastMod time.Time
 
 	for {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(routePollInterval)
 
 		info, err := os.Stat(s.routesFile)
 		if err != nil {
@@ -321,9 +359,38 @@ func (s *Server) watchRoutes() {
 			lastMod = info.ModTime()
 			if err := s.loadRoutes(); err != nil {
 				log.Printf("warning: failed to reload routes: %v", err)
+				continue
 			}
+			s.reconcileTCPListeners()
 		}
 	}
+}
+
+// reconcileTCPListeners stops listeners for removed TCP routes and starts
+// listeners for new ones.
+func (s *Server) reconcileTCPListeners() {
+	s.mu.RLock()
+	activeTCP := make(map[string]bool)
+	for _, route := range s.routes {
+		if route.Type == "tcp" {
+			activeTCP[route.Domain] = true
+		}
+	}
+	s.mu.RUnlock()
+
+	// Stop listeners for routes that no longer exist
+	s.mu.Lock()
+	for domain, ln := range s.tcpListeners {
+		if !activeTCP[domain] {
+			ln.Close()
+			delete(s.tcpListeners, domain)
+			log.Printf("tcp proxy: stopped listener for removed route %s", domain)
+		}
+	}
+	s.mu.Unlock()
+
+	// Start listeners for new routes
+	s.startTCPListeners()
 }
 
 func (s *Server) buildTLSConfig() (*tls.Config, error) {
@@ -362,7 +429,7 @@ func PidFile(configDir string) string {
 
 // WritePidFile writes the current process PID.
 func WritePidFile(configDir string) error {
-	return os.WriteFile(PidFile(configDir), []byte(fmt.Sprintf("%d", os.Getpid())), 0644)
+	return os.WriteFile(PidFile(configDir), []byte(fmt.Sprintf("%d", os.Getpid())), 0600)
 }
 
 // ReadPid reads the proxy PID from disk. Returns 0 if not found.

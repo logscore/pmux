@@ -2,7 +2,6 @@ package port
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -16,10 +15,18 @@ func Find(startFrom int, routesFile string) (int, error) {
 	if startFrom == 0 {
 		startFrom = 3000
 	}
+	if startFrom < 1 || startFrom > 65535 {
+		return 0, fmt.Errorf("invalid start port %d: must be between 1 and 65535", startFrom)
+	}
 
 	claimed := loadClaimedPorts(routesFile)
 
-	for port := startFrom; port < startFrom+1000; port++ {
+	endPort := startFrom + 1000
+	if endPort > 65535 {
+		endPort = 65535
+	}
+
+	for port := startFrom; port < endPort; port++ {
 		if claimed[port] {
 			continue
 		}
@@ -30,7 +37,7 @@ func Find(startFrom int, routesFile string) (int, error) {
 			return port, nil
 		}
 	}
-	return 0, errors.New("no available port in range " + fmt.Sprintf("%d-%d", startFrom, startFrom+999))
+	return 0, fmt.Errorf("no available port in range %d-%d", startFrom, endPort-1)
 }
 
 // loadClaimedPorts reads the routes file and returns a set of ports in use.

@@ -1,4 +1,4 @@
-BIN := pmux
+BIN := ./dist/pmux
 GO := go
 
 .PHONY: build clean run
@@ -7,7 +7,7 @@ GO := go
 build:
 	$(GO) build -o $(BIN) .
 
-## run: build and run with arguments (usage: make run ARGS='run "bun dev"')
+## run: build and run with arguments (make run ARGS='run "bun dev"')
 run: build
 	./$(BIN) $(ARGS)
 

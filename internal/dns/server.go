@@ -1,11 +1,13 @@
 package dns
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/miekg/dns"
 )
@@ -35,12 +37,24 @@ func Start() (*Server, error) {
 	go func() { errCh <- s.udp.ListenAndServe() }()
 	go func() { errCh <- s.tcp.ListenAndServe() }()
 
-	// Check for immediate startup errors
-	// (give servers a moment to fail if port is busy)
-	select {
-	case err := <-errCh:
-		return nil, err
-	default:
+	// Give servers a moment to fail if port is busy, then check for errors.
+	time.Sleep(50 * time.Millisecond)
+
+	// Drain all immediately available errors
+	var errs []error
+	for {
+		select {
+		case err := <-errCh:
+			errs = append(errs, err)
+		default:
+			goto done
+		}
+	}
+done:
+	if len(errs) > 0 {
+		// Stop whichever server may still be running
+		s.Stop()
+		return nil, fmt.Errorf("dns server startup failed: %v", errs)
 	}
 
 	log.Printf("dns listening on 127.0.0.1:53 (upstream: %s)", upstream)

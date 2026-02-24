@@ -106,8 +106,8 @@ func CATrusted(p Platform, caCertPath string) bool {
 
 	switch p {
 	case PlatformDarwin:
-		// security verify-cert returns 0 if the cert is trusted
-		err := exec.Command("security", "verify-cert", "-c", caCertPath, "-p", "ssl").Run()
+		// verify-cert with trustRoot policy checks that the cert is trusted as a root CA
+		err := exec.Command("security", "verify-cert", "-c", caCertPath, "-p", "trustRoot").Run()
 		return err == nil
 	case PlatformLinux:
 		// Check if our CA is in the system trust store
