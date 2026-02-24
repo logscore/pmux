@@ -1,9 +1,9 @@
 # pmux
 
-A CLI tool that wraps dev servers, assigns ports dynamically via the `PORT` environment variable, and configures subdomain routing via a built-in reverse proxy and DNS server. Zero external dependencies.
+A CLI tool that lets you run multiple dev servers with a human readible domain name. No port conflicts, no cookie bleed across dev servers, just one simple tool.
 
 ```
-pmux run "bun dev"
+pmux run "<dev command>"
 ```
 
 Automatically finds an available port, injects it as `PORT`, and routes `feat-auth.my-app.test` to your dev server.
@@ -18,8 +18,6 @@ Everything is built into the `pmux` binary:
 - **DNS server** resolves all `*.test` domains to `127.0.0.1`
 - **HTTP reverse proxy** routes each subdomain to the correct local port
 - **TCP proxy** for raw TCP forwarding (databases, Redis, etc.)
-
-No dnsmasq, no Caddy, no Nginx. Just `pmux`.
 
 ## Install
 
@@ -54,6 +52,8 @@ sudo mv dist/pmux /usr/local/bin/
 
 ```bash
 pmux run "npm run dev"
+# OR
+pmux run -d "npm run dev"
 ```
 
 On first run, pmux will ask for your password once to configure DNS resolution for `.test` domains. After that, everything is automatic.
@@ -69,18 +69,19 @@ For non-git directories, a stable 5-character hash of the working directory is u
 #### Flags
 
 ```bash
-pmux run "bun dev" --port 4000        # start scanning from port 4000
+pmux run "bun dev" --port 4000            # start scanning from port 4000
 pmux run "cargo watch -x run" --name api  # override subdomain
-pmux run "bun dev" --tls              # enable HTTPS (generates certs if needed)
+pmux run "bun dev" --tls                  # enable HTTPS (generates certs if needed)
+pmux run -d "bun dev"                     # runs in detatched mode like docker
 ```
 
-### List active tunnels
+### List active servers
 
 ```bash
 pmux list
 ```
 
-### Stop a tunnel
+### Stop a server
 
 ```bash
 pmux stop feat-auth.my-app.test
@@ -96,10 +97,14 @@ pmux proxy run         # run in foreground (for debugging)
 pmux proxy stop        # stop the daemon
 ```
 
+### DNS management
+
+We don't have commands for DNS manangement yet since the DNS server and proxy are ephemeral. Meaning when the last pmux session closes, both the proxy and the DNS server are cleaned up and removed.
+
 ### Teardown
 
 ```bash
-pmux teardown              # stop everything, clear routes
+pmux teardown       # stop everything, clear routes. Like docker compose down, but for all the servers.
 pmux teardown --remove-dns # also remove DNS resolver config
 ```
 
@@ -113,28 +118,9 @@ make clean    # remove build artifacts
 make cross    # cross-compile all targets
 ```
 
-### Project structure
+### Known issues
 
-```
-pmux/
-├── main.go                    # CLI entry point
-├── cmd/                       # Command implementations
-│   ├── run.go
-│   ├── proxy.go
-│   ├── list.go
-│   ├── stop.go
-│   └── teardown.go
-├── internal/
-│   ├── proxy/
-│   │   ├── server.go          # HTTP reverse proxy + TCP proxy
-│   │   └── certs.go           # Self-signed TLS cert generation
-│   ├── dns/server.go          # Built-in DNS server (*.test -> 127.0.0.1)
-│   ├── domain/generator.go    # Domain name from git branch + dir
-│   ├── platform/platform.go   # OS detection + resolver config
-│   ├── port/finder.go         # Available port scanner
-│   └── process/spawn.go       # Process lifecycle + signal handling
-└── pkg/config/config.go       # Routes file persistence
-```
+Some times Vite will crash when ran inside pmux with the error `RangeError: Invalid WebSocket frame: RSV1 must be clear`. Frankly, I don't know how to solve that. It's kind of a consistent bug.
 
 ## License
 
