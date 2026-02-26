@@ -222,6 +222,14 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			if _, ok := req.Header["X-Forwarded-For"]; !ok {
 				req.Header.Set("X-Forwarded-For", r.RemoteAddr)
 			}
+			// Strip WebSocket compression negotiation to prevent RSV1
+			// frame errors when proxying (e.g. Vite HMR). The proxy
+			// copies raw bytes after the 101 upgrade; if permessage-deflate
+			// is agreed upon, the transport layer can corrupt compressed
+			// frames. Removing the extension offer keeps frames uncompressed.
+			if isWebSocketUpgrade(req) {
+				req.Header.Del("Sec-WebSocket-Extensions")
+			}
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			log.Printf("proxy error [%s -> %s]: %v", host, upstream, err)
@@ -230,6 +238,12 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxy.ServeHTTP(w, r)
+}
+
+// isWebSocketUpgrade reports whether r is a WebSocket upgrade request.
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Connection"), "upgrade") &&
+		strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }
 
 // startTCPListeners starts a TCP listener for each tcp-type route.

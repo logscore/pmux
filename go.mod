@@ -2,7 +2,10 @@ module github.com/logscore/pmux
 
 go 1.25.5
 
-require github.com/miekg/dns v1.1.72
+require (
+	github.com/gorilla/websocket v1.5.3
+	github.com/miekg/dns v1.1.72
+)
 
 require (
 	golang.org/x/mod v0.31.0 // indirect
