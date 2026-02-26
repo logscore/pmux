@@ -19,6 +19,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	pmuxdns "github.com/logscore/pmux/internal/dns"
 )
 
@@ -215,6 +217,14 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	upstream := fmt.Sprintf("localhost:%d", matched.Port)
 
+	// WebSocket upgrades bypass httputil.ReverseProxy entirely.
+	// Go's HTTP transport can corrupt WebSocket frames (RSV1 errors),
+	// so we hijack both connections and copy raw bytes.
+	if websocket.IsWebSocketUpgrade(r) {
+		s.handleWebSocket(w, r, upstream, host)
+		return
+	}
+
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			req.URL.Scheme = "http"
@@ -303,6 +313,62 @@ var notFoundTmpl = template.Must(template.New("notfound").Parse(`<!DOCTYPE html>
 </div>
 </body>
 </html>`))
+
+// handleWebSocket proxies a WebSocket connection by terminating the
+// protocol on both sides (client ↔ proxy ↔ upstream). Because each
+// side is an independent WebSocket connection, compression negotiation
+// is fully isolated — the RSV1 frame corruption that occurs when
+// httputil.ReverseProxy passes compressed frames through is impossible.
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request, upstream, host string) {
+	// Accept the client's WebSocket upgrade
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(*http.Request) bool { return true },
+	}
+	clientConn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("websocket proxy: client upgrade: %v", err)
+		return
+	}
+	defer clientConn.Close()
+
+	// Dial the upstream as a fresh WebSocket connection (no compression)
+	dialer := websocket.Dialer{}
+	reqHeader := http.Header{
+		"Host":             {host},
+		"X-Forwarded-Host": {host},
+	}
+	if v := r.Header.Get("X-Forwarded-For"); v != "" {
+		reqHeader.Set("X-Forwarded-For", v)
+	} else {
+		reqHeader.Set("X-Forwarded-For", r.RemoteAddr)
+	}
+
+	upstreamConn, _, err := dialer.Dial("ws://"+upstream+r.URL.RequestURI(), reqHeader)
+	if err != nil {
+		log.Printf("websocket proxy: upstream dial ws://%s%s: %v", upstream, r.URL.RequestURI(), err)
+		return
+	}
+	defer upstreamConn.Close()
+
+	// Bidirectional message copy
+	errc := make(chan error, 2)
+	go func() { errc <- copyWS(upstreamConn, clientConn) }() // client → upstream
+	go func() { errc <- copyWS(clientConn, upstreamConn) }() // upstream → client
+	<-errc
+}
+
+// copyWS reads messages from src and writes them to dst until an error occurs.
+func copyWS(dst, src *websocket.Conn) error {
+	for {
+		mt, msg, err := src.ReadMessage()
+		if err != nil {
+			return err
+		}
+		if err := dst.WriteMessage(mt, msg); err != nil {
+			return err
+		}
+	}
+}
 
 // startTCPListeners starts a TCP listener for each tcp-type route.
 func (s *Server) startTCPListeners() {

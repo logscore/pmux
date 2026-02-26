@@ -118,10 +118,6 @@ make clean    # remove build artifacts
 make cross    # cross-compile all targets
 ```
 
-### Known issues
-
-Some times Vite will crash when ran inside pmux with the error `RangeError: Invalid WebSocket frame: RSV1 must be clear`. Frankly, I don't know how to solve that. It's kind of a consistent bug.
-
 ## License
 
 MIT
