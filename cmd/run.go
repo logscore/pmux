@@ -87,6 +87,15 @@ func Run(opts RunOptions) error {
 		}
 	}
 
+	store := config.NewStore(paths.RoutesFile)
+
+	// Prune routes for processes that are no longer alive
+	if pruned, err := store.PruneStaleRoutes(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to prune stale routes: %v\n", err)
+	} else if pruned > 0 {
+		fmt.Printf("cleaned up %d stale route(s)\n", pruned)
+	}
+
 	// Find available port (checks both OS and routes.json)
 	assignedPort, err := port.Find(opts.StartPort, paths.RoutesFile)
 	if err != nil {
@@ -99,7 +108,13 @@ func Run(opts RunOptions) error {
 		return fmt.Errorf("failed to generate domain: %w", err)
 	}
 
-	store := config.NewStore(paths.RoutesFile)
+	// Check for domain conflict with an already-running process
+	if existing := store.FindRoute(dom); existing != nil {
+		return fmt.Errorf(
+			"domain %s is already in use (pid %d, port %d)\n\n  To run another service on this project, use --name:\n\n    pmux run %q --name <service-name>\n",
+			dom, existing.PID, existing.Port, opts.Command,
+		)
+	}
 
 	scheme := "http"
 	if opts.TLS {

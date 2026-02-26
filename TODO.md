@@ -1,3 +1,0 @@
-- [ ] Add a flag to the stop to stop all processes
-- [ ] Make the output look sexier with colors and good spacing
-- [ ]

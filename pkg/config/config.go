@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -111,6 +112,63 @@ func (s *Store) RemoveRoute(domain string) error {
 	}
 
 	return s.saveUnsafe(filtered)
+}
+
+// PruneStaleRoutes removes routes whose PID is no longer alive.
+// Returns the number of routes pruned.
+func (s *Store) PruneStaleRoutes() (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	routes, err := s.loadUnsafe()
+	if err != nil {
+		return 0, err
+	}
+	if len(routes) == 0 {
+		return 0, nil
+	}
+
+	var alive []Route
+	for _, r := range routes {
+		if r.PID > 0 && !processAlive(r.PID) {
+			continue // stale
+		}
+		alive = append(alive, r)
+	}
+
+	pruned := len(routes) - len(alive)
+	if pruned > 0 {
+		if err := s.saveUnsafe(alive); err != nil {
+			return 0, err
+		}
+	}
+	return pruned, nil
+}
+
+// FindRoute returns the first route matching the given domain, or nil.
+func (s *Store) FindRoute(domain string) *Route {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	routes, err := s.loadUnsafe()
+	if err != nil {
+		return nil
+	}
+	for i := range routes {
+		if routes[i].Domain == domain {
+			return &routes[i]
+		}
+	}
+	return nil
+}
+
+// processAlive checks if a process with the given PID is still running.
+func processAlive(pid int) bool {
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	return proc.Signal(syscall.Signal(0)) == nil
 }
 
 // ClearRoutes removes all routes.

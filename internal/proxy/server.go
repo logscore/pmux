@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net"
@@ -208,7 +209,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	s.mu.RUnlock()
 
 	if matched == nil {
-		http.Error(w, fmt.Sprintf("pmux: no route for host %q", host), http.StatusNotFound)
+		s.serveNotFound(w, host)
 		return
 	}
 
@@ -231,6 +232,77 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	proxy.ServeHTTP(w, r)
 }
+
+// serveNotFound renders a styled HTML page listing all available routes.
+func (s *Server) serveNotFound(w http.ResponseWriter, host string) {
+	s.mu.RLock()
+	routes := make([]Route, len(s.routes))
+	copy(routes, s.routes)
+	s.mu.RUnlock()
+
+	data := struct {
+		Host   string
+		Routes []Route
+	}{Host: host, Routes: routes}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	if err := notFoundTmpl.Execute(w, data); err != nil {
+		log.Printf("warning: failed to render not-found page: %v", err)
+	}
+}
+
+var notFoundTmpl = template.Must(template.New("notfound").Parse(`<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pmux - not found</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #c9d1d9; font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; display: flex; justify-content: center; padding: 60px 20px; min-height: 100vh; }
+  .container { max-width: 600px; width: 100%; }
+  h1 { font-size: 1.4rem; color: #f85149; margin-bottom: 6px; }
+  .sub { color: #8b949e; font-size: 0.85rem; margin-bottom: 32px; }
+  h2 { font-size: 0.9rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  .routes { border: 1px solid #21262d; border-radius: 6px; overflow: hidden; }
+  .route { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid #21262d; }
+  .route:last-child { border-bottom: none; }
+  .route a { color: #58a6ff; text-decoration: none; }
+  .route a:hover { text-decoration: underline; }
+  .port { color: #8b949e; font-size: 0.85rem; }
+  .tag { font-size: 0.7rem; color: #8b949e; background: #21262d; padding: 2px 6px; border-radius: 3px; margin-left: 8px; }
+  .empty { padding: 20px 14px; color: #8b949e; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>not found</h1>
+  <p class="sub">no route configured for <strong>{{.Host}}</strong></p>
+  <h2>available routes</h2>
+  <div class="routes">
+  {{if .Routes}}
+    {{range .Routes}}
+    <div class="route">
+      <span>
+        {{if eq .Type "tcp"}}
+          {{.Domain}}<span class="tag">tcp</span>
+        {{else}}
+          <a href="http://{{.Domain}}">{{.Domain}}</a>
+        {{end}}
+      </span>
+      <span class="port">
+        {{if eq .Type "tcp"}}:{{.ListenPort}} &rarr; :{{.Port}}{{else}}:{{.Port}}{{end}}
+      </span>
+    </div>
+    {{end}}
+  {{else}}
+    <div class="empty">no routes configured</div>
+  {{end}}
+  </div>
+</div>
+</body>
+</html>`))
 
 // startTCPListeners starts a TCP listener for each tcp-type route.
 func (s *Server) startTCPListeners() {
