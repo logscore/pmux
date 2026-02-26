@@ -20,6 +20,8 @@ func TestIsWebSocketUpgrade(t *testing.T) {
 	}{
 		{"valid upgrade", "Upgrade", "websocket", true},
 		{"case insensitive", "upgrade", "WebSocket", true},
+		{"multi-value connection", "keep-alive, Upgrade", "websocket", true},
+		{"multi-value mixed case", "Keep-Alive, upgrade", "websocket", true},
 		{"normal request", "", "", false},
 		{"upgrade to h2c", "Upgrade", "h2c", false},
 		{"websocket without connection upgrade", "keep-alive", "websocket", false},
@@ -34,20 +36,18 @@ func TestIsWebSocketUpgrade(t *testing.T) {
 			if tt.upgrade != "" {
 				r.Header.Set("Upgrade", tt.upgrade)
 			}
-			if got := isWebSocketUpgrade(r); got != tt.want {
-				t.Errorf("isWebSocketUpgrade() = %v, want %v", got, tt.want)
+			if got := websocket.IsWebSocketUpgrade(r); got != tt.want {
+				t.Errorf("IsWebSocketUpgrade() = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
-// TestProxyStripsWebSocketExtensions verifies the fix: the proxy must remove
-// Sec-WebSocket-Extensions from upgrade requests so that the upstream never
-// negotiates permessage-deflate compression.  Without this, compressed frames
-// (RSV1 set) can be corrupted by the HTTP transport layer, producing:
-//
-//	RangeError: Invalid WebSocket frame: RSV1 must be clear
-func TestProxyStripsWebSocketExtensions(t *testing.T) {
+// TestProxyIsolatesCompression verifies that the proxy terminates WebSocket
+// on both sides, so the upstream never sees the client's compression offer.
+// The proxy dials the upstream as a fresh connection without permessage-deflate,
+// preventing RSV1 frame errors entirely.
+func TestProxyIsolatesCompression(t *testing.T) {
 	var mu sync.Mutex
 	var receivedExtensions string
 
@@ -89,19 +89,17 @@ func TestProxyStripsWebSocketExtensions(t *testing.T) {
 	mu.Unlock()
 
 	if ext != "" {
-		t.Errorf("proxy forwarded Sec-WebSocket-Extensions = %q to upstream; "+
-			"want empty (the proxy must strip this to prevent RSV1 errors)", ext)
+		t.Errorf("upstream received Sec-WebSocket-Extensions = %q; "+
+			"want empty (proxy should open an independent connection without compression)", ext)
 	}
 
 	if strings.Contains(resp.Header.Get("Sec-WebSocket-Extensions"), "permessage-deflate") {
-		t.Error("response negotiated permessage-deflate; the proxy should have prevented this")
+		t.Error("client response negotiated permessage-deflate; proxy should not offer compression")
 	}
 }
 
 // TestWebSocketEchoThroughProxy exchanges messages through the proxy and
-// verifies none are corrupted.  Before the fix, compressed frames from the
-// upstream would carry RSV1=1 and the client would reject them with
-// "Invalid WebSocket frame: RSV1 must be clear".
+// verifies none are corrupted.
 func TestWebSocketEchoThroughProxy(t *testing.T) {
 	upgrader := websocket.Upgrader{
 		EnableCompression: true,
@@ -152,7 +150,7 @@ func TestWebSocketEchoThroughProxy(t *testing.T) {
 		}
 		_, got, err := conn.ReadMessage()
 		if err != nil {
-			t.Fatalf("ReadMessage: %v (RSV1 frame error would appear here without the fix)", err)
+			t.Fatalf("ReadMessage: %v", err)
 		}
 		if string(got) != want {
 			t.Errorf("echo mismatch:\n got %q\nwant %q", got, want)
@@ -162,7 +160,7 @@ func TestWebSocketEchoThroughProxy(t *testing.T) {
 
 // TestDirectConnectionNegotiatesCompression is a control: connecting directly
 // to the upstream (bypassing the proxy) DOES negotiate permessage-deflate.
-// This proves the proxy is the component that strips the extension.
+// This proves the upstream supports compression — the proxy just doesn't use it.
 func TestDirectConnectionNegotiatesCompression(t *testing.T) {
 	upgrader := websocket.Upgrader{
 		EnableCompression: true,
@@ -194,8 +192,8 @@ func TestDirectConnectionNegotiatesCompression(t *testing.T) {
 	}
 }
 
-// TestNonWebSocketRequestPreservesHeaders ensures the proxy only strips
-// Sec-WebSocket-Extensions on upgrade requests, not on regular HTTP.
+// TestNonWebSocketRequestPreservesHeaders ensures regular HTTP requests
+// pass headers through unmodified (WebSocket goes through a separate path).
 func TestNonWebSocketRequestPreservesHeaders(t *testing.T) {
 	var receivedExtensions string
 
@@ -223,7 +221,7 @@ func TestNonWebSocketRequestPreservesHeaders(t *testing.T) {
 
 	if receivedExtensions != "permessage-deflate" {
 		t.Errorf("non-upgrade request: Sec-WebSocket-Extensions = %q; "+
-			"want %q (proxy should only strip on WebSocket upgrades)",
+			"want %q (regular HTTP headers should pass through unmodified)",
 			receivedExtensions, "permessage-deflate")
 	}
 }
