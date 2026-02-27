@@ -18,14 +18,14 @@ Usage:
   roxy logs <id|domain>          Tail logs for a detached process
 
 Run flags:
-  -d, --detach     Run in the background (detached mode)
-  --port <n>       Start scanning from this port (default: 3000)
-  --name <name>    Override subdomain name
-  --tls            Enable HTTPS for this server
+  -d, --detach       Run in the background (detached mode)
+  -p, --port <n>     Start scanning from this port (default: 3000)
+  -n, --name <name>  Override subdomain name
+  --tls              Enable HTTPS for this process
 
 Stop flags:
-  -a, --all        Stop all routes and the proxy
-  --remove-dns     Also remove DNS resolver configuration (with -a)`
+  -a, --all          Stop all routes and the proxy
+  --remove-dns       Also remove DNS resolver configuration (with -a)`
 
 func main() {
 	args := os.Args[1:]
@@ -78,7 +78,7 @@ func runCommand(args []string) error {
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
-		case "--port":
+		case "-p", "--port":
 			if i+1 >= len(args) {
 				die("--port requires a value")
 			}
@@ -88,7 +88,7 @@ func runCommand(args []string) error {
 				die("invalid port: " + args[i])
 			}
 			opts.StartPort = p
-		case "--name":
+		case "-n", "--name":
 			if i+1 >= len(args) {
 				die("--name requires a value")
 			}
@@ -120,7 +120,7 @@ func runCommand(args []string) error {
 	}
 
 	if opts.Command == "" {
-		die("usage: roxy run \"<command>\" [--port <n>] [--name <name>] [--tls]")
+		die("usage: roxy run \"<command>\" [-p <number>] [-n <name>] [--tls] [-d]")
 	}
 
 	return cmd.Run(opts)
@@ -141,7 +141,7 @@ func stopCommand(args []string) error {
 	}
 
 	if !opts.All && len(opts.Targets) == 0 {
-		die("usage: roxy stop <id|domain>... or roxy stop -a")
+		die("usage: roxy stop <id|domain>... or roxy stop -a [--remove-dns]")
 	}
 
 	return cmd.Stop(opts)

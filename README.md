@@ -69,11 +69,18 @@ For non-git directories, a stable 5-character hash of the working directory is u
 #### Flags
 
 ```bash
-roxy run "bun dev" --port 4000            # start scanning from port 4000
-roxy run "cargo watch -x run" --name api  # override subdomain
-roxy run "bun dev" --tls                  # enable HTTPS (generates certs if needed)
-roxy run -d "bun dev"                     # runs in detatched mode like docker
+roxy run "bun dev" -p 4000            # start scanning from port 4000
+roxy run "cargo watch -x run" -n api  # override subdomain
+roxy run "bun dev" --tls              # enable HTTPS (generates certs if needed)
+roxy run -d "bun dev"                 # runs in detached mode like docker
 ```
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-d` | `--detach` | Run in the background (detached mode) |
+| `-p` | `--port <n>` | Start scanning from this port (default: 3000) |
+| `-n` | `--name <name>` | Override subdomain name |
+|      | `--tls` | Enable HTTPS for this server |
 
 ### List active servers
 
@@ -84,29 +91,32 @@ roxy list
 ### Stop a server
 
 ```bash
+# By url
 roxy stop feat-auth.my-app.test
+
+# By ID
+roxy stop a2m4l
 ```
 
 ### Proxy management
 
-The proxy auto-starts when you run `roxy run`. You can also manage it manually:
-
-```bash
-roxy proxy start       # start as background daemon
-roxy proxy run         # run in foreground (for debugging)
-roxy proxy stop        # stop the daemon
-```
+The proxy auto-starts when you run `roxy run`, and spins down when the last roxy process stops.
 
 ### DNS management
 
 We don't have commands for DNS management yet since the DNS server and proxy are ephemeral. Meaning when the last roxy session closes, both the proxy and the DNS server are cleaned up and removed.
 
-### Teardown
+### Nuke everything
 
 ```bash
-roxy teardown       # stop everything, clear routes. Like docker compose down, but for all the servers.
-roxy teardown --remove-dns # also remove DNS resolver config
+roxy stop -a        # stop everything, clear routes. Like docker compose down, but for all the servers.
+roxy stop -a -r     # also remove DNS resolver config
 ```
+
+| Short | Long | Description |
+|-------|------|-------------|
+| `-a` | `--all` | Stop all routes and the proxy |
+|      | `--remove-dns` | Also remove DNS resolver configuration (with `-a`) |
 
 ## Development
 
