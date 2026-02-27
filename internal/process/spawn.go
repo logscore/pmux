@@ -14,7 +14,7 @@ import (
 
 // Run spawns the command with PORT set, tracks the route, and
 // handles cleanup on exit or signal.
-func Run(cmdStr string, port int, domain string, tlsEnabled bool, store *config.Store, configDir string, logFile string) error {
+func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, store *config.Store, configDir string, logFile string) error {
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
@@ -22,6 +22,7 @@ func Run(cmdStr string, port int, domain string, tlsEnabled bool, store *config.
 
 	// Track route (the proxy watches routes.json for changes)
 	if err := store.AddRoute(config.Route{
+		ID:      id,
 		Domain:  domain,
 		Port:    port,
 		Type:    "http",

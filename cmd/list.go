@@ -25,13 +25,9 @@ func List() error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "DOMAIN\tPORT\tTYPE\tPID\tCOMMAND")
+	fmt.Fprintln(w, "ID\tDOMAIN\tTYPE\tPORT\tPID\tCOMMAND")
 	for _, r := range routes {
-		typ := r.Type
-		if typ == "" {
-			typ = "http"
-		}
-		fmt.Fprintf(w, "%s\t%d\t%s\t%d\t%s\n", r.Domain, r.Port, typ, r.PID, r.Command)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%d\t%d\t%s\n", r.ID, r.Domain, r.Type, r.Port, r.PID, r.Command)
 	}
 	return w.Flush()
 }

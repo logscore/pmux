@@ -12,13 +12,10 @@ const usage = `porter - dev server port multiplexer with subdomain routing
 
 Usage:
   porter run "<command>" [flags]   Run command with auto port/domain
-  porter list                      List active tunnels
-  porter stop <domain>             Stop a specific tunnel
-  porter logs <domain>             Tail logs for a detached process
-  porter proxy start [flags]       Start the proxy daemon
-  porter proxy run [flags]         Run the proxy in the foreground
-  porter proxy stop                Stop the proxy daemon
-  porter teardown [flags]          Stop everything and clean up
+  porter list                      List active routes
+  porter stop <id|domain>...       Stop one or more routes
+  porter stop -a [--remove-dns]    Stop all routes and proxy
+  porter logs <id|domain>          Tail logs for a detached process
 
 Run flags:
   -d, --detach     Run in the background (detached mode)
@@ -26,13 +23,9 @@ Run flags:
   --name <name>    Override subdomain name
   --tls            Enable HTTPS for this server
 
-Proxy flags:
-  --tls            Enable HTTPS listener
-  --http-port <n>  HTTP listen port (default: 80)
-  --https-port <n> HTTPS listen port (default: 443)
-
-Teardown flags:
-  --remove-dns     Also remove DNS resolver configuration`
+Stop flags:
+  -a, --all        Stop all routes and the proxy
+  --remove-dns     Also remove DNS resolver configuration (with -a)`
 
 func main() {
 	args := os.Args[1:]
@@ -52,17 +45,17 @@ func main() {
 		err = cmd.List()
 
 	case "stop":
-		if len(args) < 2 {
-			die("usage: porter stop <domain>")
-		}
-		err = cmd.Stop(args[1])
+		err = stopCommand(args[1:])
 
+	case "logs":
+		if len(args) < 2 {
+			die("usage: porter logs <id|domain>")
+		}
+		err = cmd.Logs(args[1])
+
+	// Internal commands (not shown in help)
 	case "proxy":
 		err = proxyCommand(args[1:])
-
-	case "teardown":
-		removeDNS := hasFlag(args[1:], "--remove-dns")
-		err = cmd.Teardown(removeDNS)
 
 	case "help", "--help", "-h":
 		fmt.Println(usage)
@@ -111,6 +104,12 @@ func runCommand(args []string) error {
 			}
 			i++
 			opts.LogFile = args[i]
+		case "--id":
+			if i+1 >= len(args) {
+				die("--id requires a value")
+			}
+			i++
+			opts.ID = args[i]
 		default:
 			if opts.Command == "" {
 				opts.Command = args[i]
@@ -127,9 +126,31 @@ func runCommand(args []string) error {
 	return cmd.Run(opts)
 }
 
+func stopCommand(args []string) error {
+	opts := cmd.StopOptions{}
+
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "-a", "--all":
+			opts.All = true
+		case "--remove-dns":
+			opts.RemoveDNS = true
+		default:
+			opts.Targets = append(opts.Targets, args[i])
+		}
+	}
+
+	if !opts.All && len(opts.Targets) == 0 {
+		die("usage: porter stop <id|domain>... or porter stop -a")
+	}
+
+	return cmd.Stop(opts)
+}
+
+// proxyCommand handles internal proxy subcommands (not user-facing).
 func proxyCommand(args []string) error {
 	if len(args) == 0 {
-		die("usage: porter proxy <start|run|stop>")
+		return fmt.Errorf("usage: porter proxy <run|stop>")
 	}
 
 	opts := cmd.ProxyOptions{
@@ -166,16 +187,13 @@ func proxyCommand(args []string) error {
 	}
 
 	switch args[0] {
-	case "start":
-		return cmd.ProxyStart(opts)
 	case "run":
 		return cmd.ProxyRun(opts)
 	case "stop":
 		return cmd.ProxyStop()
 	default:
-		die("unknown proxy command: " + args[0])
+		return fmt.Errorf("unknown proxy command: %s", args[0])
 	}
-	return nil
 }
 
 func hasFlag(args []string, flag string) bool {

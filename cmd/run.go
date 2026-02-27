@@ -23,6 +23,7 @@ type RunOptions struct {
 	TLS       bool
 	Detach    bool
 	LogFile   string
+	ID        string // internal: passed from parent when re-execing in detach mode
 }
 
 // LogsDir returns the path to the logs directory.
@@ -122,9 +123,14 @@ func Run(opts RunOptions) error {
 		scheme = "https"
 	}
 
+	id := opts.ID
+	if id == "" {
+		id = config.GenerateID(dom)
+	}
+
 	// Detached mode: re-exec ourselves without -d, in a new session with log output
 	if opts.Detach {
-		return runDetached(opts, paths, dom, assignedPort, scheme)
+		return runDetached(opts, paths, dom, id, assignedPort, scheme)
 	}
 
 	url := fmt.Sprintf("%s://%s", scheme, dom)
@@ -132,14 +138,15 @@ func Run(opts RunOptions) error {
 	fmt.Println()
 	fmt.Printf("  %s\n", url)
 	fmt.Println()
+	fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
 	fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
 	fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
 	fmt.Println()
 
-	return process.Run(opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir, opts.LogFile)
+	return process.Run(id, opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir, opts.LogFile)
 }
 
-func runDetached(opts RunOptions, paths platform.Paths, dom string, assignedPort int, scheme string) error {
+func runDetached(opts RunOptions, paths platform.Paths, dom string, id string, assignedPort int, scheme string) error {
 	logsDir := LogsDir(paths.ConfigDir)
 	if err := os.MkdirAll(logsDir, 0755); err != nil {
 		return fmt.Errorf("failed to create logs dir: %w", err)
@@ -166,8 +173,9 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, assignedPort
 	if opts.TLS {
 		args = append(args, "--tls")
 	}
-	// Pass the log file path so the child can record it in the route
+	// Pass internal flags so the child records them in the route
 	args = append(args, "--log-file", logPath)
+	args = append(args, "--id", id)
 
 	cmd := exec.Command(exePath, args...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -184,6 +192,7 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, assignedPort
 	fmt.Println()
 	fmt.Printf("  %s\n", url)
 	fmt.Println()
+	fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
 	fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
 	fmt.Printf("  \x1b[90mpid\x1b[0m     %d\n", cmd.Process.Pid)
 	fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)

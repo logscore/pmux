@@ -10,30 +10,22 @@ import (
 	"github.com/logscore/porter/pkg/config"
 )
 
-// Logs tails the log file for a detached process identified by domain.
-func Logs(domain string) error {
+// Logs tails the log file for a detached process identified by ID or domain.
+func Logs(target string) error {
 	p := platform.Detect()
 	paths := platform.GetPaths(p)
 	store := config.NewStore(paths.RoutesFile)
 
-	routes, err := store.LoadRoutes()
+	route, err := store.ResolveRoute(target)
 	if err != nil {
-		return fmt.Errorf("failed to load routes: %w", err)
+		return err
 	}
 
-	var logFile string
-	for _, r := range routes {
-		if r.Domain == domain {
-			logFile = r.LogFile
-			break
-		}
+	if route.LogFile == "" {
+		return fmt.Errorf("no log file for %s (is it running with --detach?)", route.Domain)
 	}
 
-	if logFile == "" {
-		return fmt.Errorf("no log file found for %q (is it running with --detach?)", domain)
-	}
-
-	f, err := os.Open(logFile)
+	f, err := os.Open(route.LogFile)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
