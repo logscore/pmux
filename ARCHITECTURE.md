@@ -1,11 +1,11 @@
-# Architecture: `porter`
+# Architecture: `roxy`
 
 A CLI tool that wraps dev servers, assigns ports dynamically via `PORT` environment variable, and configures subdomain routing via a built-in reverse proxy and DNS server. Zero external dependencies beyond a single Go DNS library.
 
 ## Overview
 
 ```
-porter run "bun dev"
+roxy run "bun dev"
 ```
 
 Automatically finds an available port, injects it via `PORT` and `HOST=127.0.0.1`, and routes `feat-auth.my-app.test` to `localhost:3001`.
@@ -25,22 +25,22 @@ Automatically finds an available port, injects it via `PORT` and `HOST=127.0.0.1
    (one-time sudo)
 ```
 
-No dnsmasq, no Caddy, no Nginx. Everything is built into the `porter` binary.
+No dnsmasq, no Caddy, no Nginx. Everything is built into the `roxy` binary.
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `porter run "<command>"` | Run command with auto port/domain/proxy |
-| `porter list` | List active tunnels |
-| `porter stop <domain>` | Stop a specific tunnel |
-| `porter proxy start` | Start proxy as background daemon |
-| `porter proxy run` | Run proxy in foreground (debugging) |
-| `porter proxy stop` | Stop the proxy daemon |
-| `porter teardown` | Stop all tunnels, clear routes, stop proxy |
-| `porter teardown --remove-dns` | Also remove DNS resolver config |
+| `roxy run "<command>"` | Run command with auto port/domain/proxy |
+| `roxy list` | List active tunnels |
+| `roxy stop <domain>` | Stop a specific tunnel |
+| `roxy proxy start` | Start proxy as background daemon |
+| `roxy proxy run` | Run proxy in foreground (debugging) |
+| `roxy proxy stop` | Stop the proxy daemon |
+| `roxy teardown` | Stop all tunnels, clear routes, stop proxy |
+| `roxy teardown --remove-dns` | Also remove DNS resolver config |
 
-## Per-Run Flow: `porter run "<command>"`
+## Per-Run Flow: `roxy run "<command>"`
 
 1. Detect platform (darwin/linux)
 2. Auto-configure DNS resolver if not already done (one-time sudo prompt)
@@ -79,7 +79,7 @@ The `--tls` flag is per-run, not global. The proxy always starts with both `:80`
 When the last route is removed (process exits), the cleanup function checks if routes are empty and sends SIGTERM to the proxy daemon. This avoids orphaned proxy processes.
 
 ### Route file watching
-The proxy polls `routes.json` every 500ms for changes (by mtime). This avoids needing an admin API or IPC mechanism — `porter run` just writes the file and the proxy picks it up.
+The proxy polls `routes.json` every 500ms for changes (by mtime). This avoids needing an admin API or IPC mechanism — `roxy run` just writes the file and the proxy picks it up.
 
 ## DNS Resolution Setup
 
@@ -87,7 +87,7 @@ The proxy polls `routes.json` every 500ms for changes (by mtime). This avoids ne
 Creates `/etc/resolver/test` containing `nameserver 127.0.0.1`. This tells macOS to send all `.test` queries to the built-in DNS server.
 
 ### Linux
-Creates `/etc/systemd/resolved.conf.d/porter.conf` with `DNS=127.0.0.1` and `Domains=~test`, then restarts `systemd-resolved`.
+Creates `/etc/systemd/resolved.conf.d/roxy.conf` with `DNS=127.0.0.1` and `Domains=~test`, then restarts `systemd-resolved`.
 
 ### Upstream discovery
 On macOS: `scutil --dns`. On Linux: parse `/etc/resolv.conf`. Falls back to `8.8.8.8:53`.
@@ -95,8 +95,8 @@ On macOS: `scutil --dns`. On Linux: parse `/etc/resolv.conf`. Falls back to `8.8
 ## TLS Certificate Chain
 
 Self-signed using `crypto/x509` (ECDSA P-256):
-1. **CA cert**: `~/.config/porter/certs/ca-cert.pem` — 10 year validity
-2. **Server cert**: `~/.config/porter/certs/server-cert.pem` — 1 year validity, wildcard `*.test` + `localhost` SANs
+1. **CA cert**: `~/.config/roxy/certs/ca-cert.pem` — 10 year validity
+2. **Server cert**: `~/.config/roxy/certs/server-cert.pem` — 1 year validity, wildcard `*.test` + `localhost` SANs
 3. **CA trust**: On first `--tls` use, auto-prompts to add CA to OS trust store:
    - macOS: `sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain`
    - Linux: Copy to `/usr/local/share/ca-certificates/` + `update-ca-certificates`
@@ -110,7 +110,7 @@ For raw TCP forwarding (databases, Redis, etc.):
 
 ## Route Configuration
 
-Routes are stored in `~/.config/porter/routes.json`:
+Routes are stored in `~/.config/roxy/routes.json`:
 
 ```json
 [
@@ -138,7 +138,7 @@ Routes are stored in `~/.config/porter/routes.json`:
 ## File Structure
 
 ```
-~/.config/porter/
+~/.config/roxy/
 ├── routes.json        # Active routes (file-watched by proxy)
 ├── proxy.pid          # Proxy daemon PID
 └── certs/
@@ -151,14 +151,14 @@ Routes are stored in `~/.config/porter/routes.json`:
 ## Project Structure
 
 ```
-porter/
+roxy/
 ├── main.go                    # CLI entry point (hand-rolled arg parser)
 ├── cmd/
-│   ├── run.go                 # porter run — auto-setup, spawn, cleanup
-│   ├── proxy.go               # porter proxy start/run/stop
-│   ├── list.go                # porter list
-│   ├── stop.go                # porter stop <domain>
-│   └── teardown.go            # porter teardown [--remove-dns]
+│   ├── run.go                 # roxy run — auto-setup, spawn, cleanup
+│   ├── proxy.go               # roxy proxy start/run/stop
+│   ├── list.go                # roxy list
+│   ├── stop.go                # roxy stop <domain>
+│   └── teardown.go            # roxy teardown [--remove-dns]
 ├── internal/
 │   ├── proxy/
 │   │   ├── server.go          # HTTP/HTTPS reverse proxy + TCP proxy + route watching
@@ -169,7 +169,7 @@ porter/
 │   ├── port/finder.go         # Sequential port scanner
 │   └── process/spawn.go       # Process lifecycle, signal forwarding, auto-stop
 ├── pkg/config/config.go       # Route struct + JSON file store
-├── go.mod                     # github.com/logscore/porter
+├── go.mod                     # github.com/logscore/roxy
 └── Makefile                   # build, run, dev, clean, cross targets
 ```
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="logscore/porter"
+REPO="logscore/roxy"
 INSTALL_DIR="/usr/local/bin"
-BINARY="porter"
+BINARY="roxy"
 
 # --- helpers ----------------------------------------------------------------
 
@@ -102,7 +102,7 @@ main() {
   local download_url="https://github.com/${REPO}/releases/download/${version}/${asset}"
   local checksums_url="https://github.com/${REPO}/releases/download/${version}/checksums.txt"
 
-  echo "Installing porter ${version} (${os}/${arch})..."
+  echo "Installing roxy ${version} (${os}/${arch})..."
 
   local tmpdir
   tmpdir="$(mktemp -d)"
@@ -123,7 +123,7 @@ main() {
     sudo mv "${tmpdir}/${asset}" "${INSTALL_DIR}/${BINARY}"
   fi
 
-  echo "porter ${version} installed to ${INSTALL_DIR}/${BINARY}"
+  echo "roxy ${version} installed to ${INSTALL_DIR}/${BINARY}"
 }
 
 main "$@"

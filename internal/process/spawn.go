@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logscore/porter/internal/proxy"
-	"github.com/logscore/porter/pkg/config"
+	"github.com/logscore/roxy/internal/proxy"
+	"github.com/logscore/roxy/pkg/config"
 )
 
 // Run spawns the command with PORT set, tracks the route, and

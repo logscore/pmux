@@ -1,0 +1,39 @@
+version: 2
+
+builds:
+  - main: .
+    binary: roxy
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "roxy_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github
+
+release:
+  github:
+    owner: logscore
+    name: roxy
+
+brews:
+  - repository:
+      owner: logscore
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    name: roxy
+    homepage: https://github.com/logscore/roxy
+    description: Dev server port multiplexer with subdomain routing
+    install: |
+      bin.install "roxy"

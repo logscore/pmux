@@ -22,8 +22,8 @@ func GenerateCA(certPath, keyPath string) error {
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(1),
 		Subject: pkix.Name{
-			Organization: []string{"porter local CA"},
-			CommonName:   "porter CA",
+			Organization: []string{"roxy local CA"},
+			CommonName:   "roxy CA",
 		},
 		NotBefore:             time.Now(),
 		NotAfter:              time.Now().Add(10 * 365 * 24 * time.Hour),
@@ -65,8 +65,8 @@ func GenerateServerCert(caCertPath, caKeyPath, certPath, keyPath string, hosts [
 	template := &x509.Certificate{
 		SerialNumber: big.NewInt(2),
 		Subject: pkix.Name{
-			Organization: []string{"porter"},
-			CommonName:   "porter server",
+			Organization: []string{"roxy"},
+			CommonName:   "roxy server",
 		},
 		NotBefore: time.Now(),
 		NotAfter:  time.Now().Add(365 * 24 * time.Hour),

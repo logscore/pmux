@@ -1,4 +1,4 @@
-BIN := ./dist/porter
+BIN := ./dist/roxy
 GO := go
 
 .PHONY: build clean run

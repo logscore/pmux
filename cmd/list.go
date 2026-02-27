@@ -5,8 +5,8 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/logscore/porter/internal/platform"
-	"github.com/logscore/porter/pkg/config"
+	"github.com/logscore/roxy/internal/platform"
+	"github.com/logscore/roxy/pkg/config"
 )
 
 func List() error {

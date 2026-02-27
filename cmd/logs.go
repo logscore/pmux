@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/logscore/porter/internal/platform"
-	"github.com/logscore/porter/pkg/config"
+	"github.com/logscore/roxy/internal/platform"
+	"github.com/logscore/roxy/pkg/config"
 )
 
 // Logs tails the log file for a detached process identified by ID or domain.

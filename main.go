@@ -5,17 +5,17 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/logscore/porter/cmd"
+	"github.com/logscore/roxy/cmd"
 )
 
-const usage = `porter - dev server port multiplexer with subdomain routing
+const usage = `roxy - dev server port multiplexer with subdomain routing
 
 Usage:
-  porter run "<command>" [flags]   Run command with auto port/domain
-  porter list                      List active routes
-  porter stop <id|domain>...       Stop one or more routes
-  porter stop -a [--remove-dns]    Stop all routes and proxy
-  porter logs <id|domain>          Tail logs for a detached process
+  roxy run "<command>" [flags]   Run command with auto port/domain
+  roxy list                      List active routes
+  roxy stop <id|domain>...       Stop one or more routes
+  roxy stop -a [--remove-dns]    Stop all routes and proxy
+  roxy logs <id|domain>          Tail logs for a detached process
 
 Run flags:
   -d, --detach     Run in the background (detached mode)
@@ -49,7 +49,7 @@ func main() {
 
 	case "logs":
 		if len(args) < 2 {
-			die("usage: porter logs <id|domain>")
+			die("usage: roxy logs <id|domain>")
 		}
 		err = cmd.Logs(args[1])
 
@@ -120,7 +120,7 @@ func runCommand(args []string) error {
 	}
 
 	if opts.Command == "" {
-		die("usage: porter run \"<command>\" [--port <n>] [--name <name>] [--tls]")
+		die("usage: roxy run \"<command>\" [--port <n>] [--name <name>] [--tls]")
 	}
 
 	return cmd.Run(opts)
@@ -141,7 +141,7 @@ func stopCommand(args []string) error {
 	}
 
 	if !opts.All && len(opts.Targets) == 0 {
-		die("usage: porter stop <id|domain>... or porter stop -a")
+		die("usage: roxy stop <id|domain>... or roxy stop -a")
 	}
 
 	return cmd.Stop(opts)
@@ -150,7 +150,7 @@ func stopCommand(args []string) error {
 // proxyCommand handles internal proxy subcommands (not user-facing).
 func proxyCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: porter proxy <run|stop>")
+		return fmt.Errorf("usage: roxy proxy <run|stop>")
 	}
 
 	opts := cmd.ProxyOptions{

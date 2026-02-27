@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/logscore/porter/internal/platform"
-	"github.com/logscore/porter/internal/proxy"
+	"github.com/logscore/roxy/internal/platform"
+	"github.com/logscore/roxy/internal/proxy"
 )
 
 type ProxyOptions struct {

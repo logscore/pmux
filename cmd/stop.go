@@ -5,9 +5,9 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/logscore/porter/internal/platform"
-	"github.com/logscore/porter/internal/proxy"
-	"github.com/logscore/porter/pkg/config"
+	"github.com/logscore/roxy/internal/platform"
+	"github.com/logscore/roxy/internal/proxy"
+	"github.com/logscore/roxy/pkg/config"
 )
 
 type StopOptions struct {
@@ -26,7 +26,7 @@ func Stop(opts StopOptions) error {
 	}
 
 	if len(opts.Targets) == 0 {
-		return fmt.Errorf("usage: porter stop <id|domain>... or porter stop -a")
+		return fmt.Errorf("usage: roxy stop <id|domain>... or roxy stop -a")
 	}
 
 	var failed bool

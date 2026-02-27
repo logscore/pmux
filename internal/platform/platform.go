@@ -34,14 +34,14 @@ func Detect() Platform {
 }
 
 func GetPaths(p Platform) Paths {
-	configDir := filepath.Join(os.Getenv("HOME"), ".config", "porter")
+	configDir := filepath.Join(os.Getenv("HOME"), ".config", "roxy")
 
 	var resolverPath string
 	switch p {
 	case PlatformDarwin:
 		resolverPath = "/etc/resolver/test"
 	case PlatformLinux:
-		resolverPath = "/etc/systemd/resolved.conf.d/porter.conf"
+		resolverPath = "/etc/systemd/resolved.conf.d/roxy.conf"
 	}
 
 	return Paths{
@@ -61,7 +61,7 @@ func ResolverConfigured(p Platform, paths Paths) bool {
 // ConfigureResolver sets up the OS to send .test queries to 127.0.0.1.
 // This requires sudo and will prompt the user for their password.
 func ConfigureResolver(p Platform, paths Paths) error {
-	fmt.Println("porter needs to configure DNS so .test domains resolve locally.")
+	fmt.Println("roxy needs to configure DNS so .test domains resolve locally.")
 	fmt.Println("This is a one-time setup that requires your password.")
 	fmt.Println()
 
@@ -98,7 +98,7 @@ func configureDarwin(paths Paths) error {
 	return cmd.Run()
 }
 
-// CATrusted checks if the porter CA cert is trusted by the OS trust store.
+// CATrusted checks if the roxy CA cert is trusted by the OS trust store.
 func CATrusted(p Platform, caCertPath string) bool {
 	if _, err := os.Stat(caCertPath); os.IsNotExist(err) {
 		return false // no cert yet, not trusted
@@ -111,16 +111,16 @@ func CATrusted(p Platform, caCertPath string) bool {
 		return err == nil
 	case PlatformLinux:
 		// Check if our CA is in the system trust store
-		_, err := os.Stat("/usr/local/share/ca-certificates/porter-ca.crt")
+		_, err := os.Stat("/usr/local/share/ca-certificates/roxy-ca.crt")
 		return err == nil
 	}
 	return false
 }
 
-// TrustCA installs the porter CA cert into the OS trust store.
+// TrustCA installs the roxy CA cert into the OS trust store.
 // This requires sudo and will prompt the user for their password.
 func TrustCA(p Platform, caCertPath string) error {
-	fmt.Println("porter needs to trust its CA certificate so browsers accept HTTPS on .test domains.")
+	fmt.Println("roxy needs to trust its CA certificate so browsers accept HTTPS on .test domains.")
 	fmt.Println("This is a one-time setup that requires your password.")
 	fmt.Println()
 
@@ -136,7 +136,7 @@ func TrustCA(p Platform, caCertPath string) error {
 		return cmd.Run()
 	case PlatformLinux:
 		cmd := exec.Command("sudo", "sh", "-c",
-			fmt.Sprintf("cp %s /usr/local/share/ca-certificates/porter-ca.crt && update-ca-certificates",
+			fmt.Sprintf("cp %s /usr/local/share/ca-certificates/roxy-ca.crt && update-ca-certificates",
 				caCertPath))
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout

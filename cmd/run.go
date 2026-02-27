@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logscore/porter/internal/domain"
-	"github.com/logscore/porter/internal/platform"
-	"github.com/logscore/porter/internal/port"
-	"github.com/logscore/porter/internal/process"
-	"github.com/logscore/porter/internal/proxy"
-	"github.com/logscore/porter/pkg/config"
+	"github.com/logscore/roxy/internal/domain"
+	"github.com/logscore/roxy/internal/platform"
+	"github.com/logscore/roxy/internal/port"
+	"github.com/logscore/roxy/internal/process"
+	"github.com/logscore/roxy/internal/proxy"
+	"github.com/logscore/roxy/pkg/config"
 )
 
 type RunOptions struct {
@@ -113,7 +113,7 @@ func Run(opts RunOptions) error {
 	// Check for domain conflict with an already-running process
 	if existing := store.FindRoute(dom); existing != nil {
 		return fmt.Errorf(
-			"domain %s is already in use (pid %d, port %d)\n\n  To run another service on this project, use --name:\n\n    porter run %q --name <service-name>\n",
+			"domain %s is already in use (pid %d, port %d)\n\n  To run another service on this project, use --name:\n\n    roxy run %q --name <service-name>\n",
 			dom, existing.PID, existing.Port, opts.Command,
 		)
 	}
@@ -137,10 +137,10 @@ func Run(opts RunOptions) error {
 
 	fmt.Println()
 	fmt.Printf("  %s\n", url)
-	fmt.Println()
-	fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
-	fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
-	fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
+	// fmt.Println()
+	// fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
+	// fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
+	// fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
 	fmt.Println()
 
 	return process.Run(id, opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir, opts.LogFile)
@@ -159,7 +159,7 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, id string, a
 	}
 	defer logFile.Close()
 
-	// Re-exec: porter run "<command>" [flags] (without --detach/-d)
+	// Re-exec: roxy run "<command>" [flags] (without --detach/-d)
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to find executable: %w", err)
@@ -192,10 +192,10 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, id string, a
 	fmt.Println()
 	fmt.Printf("  %s\n", url)
 	fmt.Println()
-	fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
-	fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
+	// fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
+	// fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
 	fmt.Printf("  \x1b[90mpid\x1b[0m     %d\n", cmd.Process.Pid)
-	fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
+	// fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
 	fmt.Printf("  \x1b[90mlogs\x1b[0m    %s\n", logPath)
 	fmt.Println()
 
