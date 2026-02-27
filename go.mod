@@ -1,4 +1,4 @@
-module github.com/logscore/pmux
+module github.com/logscore/porter
 
 go 1.25.5
 

@@ -8,12 +8,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logscore/pmux/internal/domain"
-	"github.com/logscore/pmux/internal/platform"
-	"github.com/logscore/pmux/internal/port"
-	"github.com/logscore/pmux/internal/process"
-	"github.com/logscore/pmux/internal/proxy"
-	"github.com/logscore/pmux/pkg/config"
+	"github.com/logscore/porter/internal/domain"
+	"github.com/logscore/porter/internal/platform"
+	"github.com/logscore/porter/internal/port"
+	"github.com/logscore/porter/internal/process"
+	"github.com/logscore/porter/internal/proxy"
+	"github.com/logscore/porter/pkg/config"
 )
 
 type RunOptions struct {
@@ -22,6 +22,7 @@ type RunOptions struct {
 	Name      string
 	TLS       bool
 	Detach    bool
+	LogFile   string
 }
 
 // LogsDir returns the path to the logs directory.
@@ -49,7 +50,7 @@ func Run(opts RunOptions) error {
 
 	// Auto-start proxy if not running
 	if !proxy.IsRunning(paths.ConfigDir) {
-		fmt.Println("starting proxy...")
+		// fmt.Println("starting proxy...")
 		if err := ProxyStart(ProxyOptions{HTTPPort: 80, TLS: true, HTTPSPort: 443}); err != nil {
 			return fmt.Errorf("failed to start proxy: %w", err)
 		}
@@ -111,7 +112,7 @@ func Run(opts RunOptions) error {
 	// Check for domain conflict with an already-running process
 	if existing := store.FindRoute(dom); existing != nil {
 		return fmt.Errorf(
-			"domain %s is already in use (pid %d, port %d)\n\n  To run another service on this project, use --name:\n\n    pmux run %q --name <service-name>\n",
+			"domain %s is already in use (pid %d, port %d)\n\n  To run another service on this project, use --name:\n\n    porter run %q --name <service-name>\n",
 			dom, existing.PID, existing.Port, opts.Command,
 		)
 	}
@@ -126,12 +127,16 @@ func Run(opts RunOptions) error {
 		return runDetached(opts, paths, dom, assignedPort, scheme)
 	}
 
-	fmt.Printf("port assigned: %d\n", assignedPort)
-	fmt.Printf("domain: %s\n", dom)
-	fmt.Printf("proxy configured\n")
-	fmt.Fprintf(os.Stdout, "\nRunning at: %s://%s\n\n", scheme, dom)
+	url := fmt.Sprintf("%s://%s", scheme, dom)
 
-	return process.Run(opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir, "")
+	fmt.Println()
+	fmt.Printf("  %s\n", url)
+	fmt.Println()
+	fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
+	fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
+	fmt.Println()
+
+	return process.Run(opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir, opts.LogFile)
 }
 
 func runDetached(opts RunOptions, paths platform.Paths, dom string, assignedPort int, scheme string) error {
@@ -147,7 +152,7 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, assignedPort
 	}
 	defer logFile.Close()
 
-	// Re-exec: pmux run "<command>" [flags] (without --detach/-d)
+	// Re-exec: porter run "<command>" [flags] (without --detach/-d)
 	exePath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to find executable: %w", err)
@@ -174,10 +179,16 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, assignedPort
 		return fmt.Errorf("failed to start detached process: %w", err)
 	}
 
-	fmt.Printf("port assigned: %d\n", assignedPort)
-	fmt.Printf("domain: %s\n", dom)
-	fmt.Printf("logs: %s\n", logPath)
-	fmt.Fprintf(os.Stdout, "\nRunning (detached) at: %s://%s  [pid %d]\n", scheme, dom, cmd.Process.Pid)
+	url := fmt.Sprintf("%s://%s", scheme, dom)
+
+	fmt.Println()
+	fmt.Printf("  %s\n", url)
+	fmt.Println()
+	fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
+	fmt.Printf("  \x1b[90mpid\x1b[0m     %d\n", cmd.Process.Pid)
+	fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
+	fmt.Printf("  \x1b[90mlogs\x1b[0m    %s\n", logPath)
+	fmt.Println()
 
 	return nil
 }

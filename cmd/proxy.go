@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/logscore/pmux/internal/platform"
-	"github.com/logscore/pmux/internal/proxy"
+	"github.com/logscore/porter/internal/platform"
+	"github.com/logscore/porter/internal/proxy"
 )
 
 type ProxyOptions struct {
@@ -58,7 +58,7 @@ func ProxyStart(opts ProxyOptions) error {
 		return fmt.Errorf("failed to start proxy: %w", err)
 	}
 
-	fmt.Printf("proxy started (pid %d)\n", cmd.Process.Pid)
+	// fmt.Printf("proxy started (pid %d)\n", cmd.Process.Pid)
 	return nil
 }
 

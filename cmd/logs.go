@@ -6,8 +6,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/logscore/pmux/internal/platform"
-	"github.com/logscore/pmux/pkg/config"
+	"github.com/logscore/porter/internal/platform"
+	"github.com/logscore/porter/pkg/config"
 )
 
 // Logs tails the log file for a detached process identified by domain.

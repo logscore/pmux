@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logscore/pmux/internal/proxy"
-	"github.com/logscore/pmux/pkg/config"
+	"github.com/logscore/porter/internal/proxy"
+	"github.com/logscore/porter/pkg/config"
 )
 
 // Run spawns the command with PORT set, tracks the route, and
@@ -39,7 +39,7 @@ func Run(cmdStr string, port int, domain string, tlsEnabled bool, store *config.
 			fmt.Fprintf(os.Stderr, "warning: failed to remove route: %v\n", err)
 			return
 		}
-		fmt.Println("done - route removed")
+		// fmt.Println("done - route removed")
 
 		// Auto-stop proxy when last route exits
 		routes, err := store.LoadRoutes()
@@ -49,7 +49,7 @@ func Run(cmdStr string, port int, domain string, tlsEnabled bool, store *config.
 				if proc, err := os.FindProcess(pid); err == nil {
 					_ = proc.Signal(syscall.SIGTERM)
 					proxy.RemovePidFile(configDir)
-					fmt.Println("done - proxy stopped (no routes remaining)")
+					// fmt.Println("done - proxy stopped (no routes remaining)")
 				}
 			}
 		}
@@ -83,7 +83,7 @@ func Run(cmdStr string, port int, domain string, tlsEnabled bool, store *config.
 
 	select {
 	case sig := <-sigChan:
-		fmt.Printf("\nReceived %v, cleaning up...\n", sig)
+		// fmt.Printf("\nReceived %v, cleaning up...\n", sig)
 		_ = cmd.Process.Signal(sig)
 
 		// If a second signal arrives during cleanup, force-kill the process

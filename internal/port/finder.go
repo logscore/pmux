@@ -9,7 +9,7 @@ import (
 
 // Find returns the first available TCP port starting from startFrom.
 // It checks both OS-level availability and the routes file to avoid
-// collisions with ports already claimed by other pmux processes.
+// collisions with ports already claimed by other porter processes.
 // If startFrom is 0, it defaults to 3000.
 func Find(startFrom int, routesFile string) (int, error) {
 	if startFrom == 0 {
@@ -22,9 +22,7 @@ func Find(startFrom int, routesFile string) (int, error) {
 	claimed := loadClaimedPorts(routesFile)
 
 	endPort := startFrom + 1000
-	if endPort > 65535 {
-		endPort = 65535
-	}
+	endPort = min(endPort, 65535)
 
 	for port := startFrom; port < endPort; port++ {
 		if claimed[port] {

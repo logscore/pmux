@@ -5,8 +5,8 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/logscore/pmux/internal/platform"
-	"github.com/logscore/pmux/pkg/config"
+	"github.com/logscore/porter/internal/platform"
+	"github.com/logscore/porter/pkg/config"
 )
 
 func List() error {
@@ -20,7 +20,7 @@ func List() error {
 	}
 
 	if len(routes) == 0 {
-		fmt.Println("No active tunnels.")
+		fmt.Println("DOMAIN\tPORT\tTYPE\tPID\tCOMMAND")
 		return nil
 	}
 

@@ -21,7 +21,7 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	pmuxdns "github.com/logscore/pmux/internal/dns"
+	porterdns "github.com/logscore/porter/internal/dns"
 )
 
 const (
@@ -96,7 +96,7 @@ func (s *Server) Run() error {
 	}
 
 	// Start built-in DNS server
-	dnsServer, err := pmuxdns.Start()
+	dnsServer, err := porterdns.Start()
 	if err != nil {
 		log.Printf("warning: failed to start DNS server: %v (is port 53 in use?)", err)
 	}
@@ -236,7 +236,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			log.Printf("proxy error [%s -> %s]: %v", host, upstream, err)
-			http.Error(w, fmt.Sprintf("pmux: upstream unreachable (%v)", err), http.StatusBadGateway)
+			http.Error(w, fmt.Sprintf("porter: upstream unreachable (%v)", err), http.StatusBadGateway)
 		},
 	}
 
@@ -267,7 +267,7 @@ var notFoundTmpl = template.Must(template.New("notfound").Parse(`<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pmux - not found</title>
+<title>Porter - not found</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { background: #0d1117; color: #c9d1d9; font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; display: flex; justify-content: center; padding: 60px 20px; min-height: 100vh; }

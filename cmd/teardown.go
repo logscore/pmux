@@ -5,8 +5,8 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/logscore/pmux/internal/platform"
-	"github.com/logscore/pmux/pkg/config"
+	"github.com/logscore/porter/internal/platform"
+	"github.com/logscore/porter/pkg/config"
 )
 
 func Teardown(removeDNS bool) error {

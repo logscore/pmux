@@ -5,20 +5,20 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/logscore/pmux/cmd"
+	"github.com/logscore/porter/cmd"
 )
 
-const usage = `pmux - dev server port multiplexer with subdomain routing
+const usage = `porter - dev server port multiplexer with subdomain routing
 
 Usage:
-  pmux run "<command>" [flags]   Run command with auto port/domain
-  pmux list                      List active tunnels
-  pmux stop <domain>             Stop a specific tunnel
-  pmux logs <domain>             Tail logs for a detached process
-  pmux proxy start [flags]       Start the proxy daemon
-  pmux proxy run [flags]         Run the proxy in the foreground
-  pmux proxy stop                Stop the proxy daemon
-  pmux teardown [flags]          Stop everything and clean up
+  porter run "<command>" [flags]   Run command with auto port/domain
+  porter list                      List active tunnels
+  porter stop <domain>             Stop a specific tunnel
+  porter logs <domain>             Tail logs for a detached process
+  porter proxy start [flags]       Start the proxy daemon
+  porter proxy run [flags]         Run the proxy in the foreground
+  porter proxy stop                Stop the proxy daemon
+  porter teardown [flags]          Stop everything and clean up
 
 Run flags:
   -d, --detach     Run in the background (detached mode)
@@ -53,7 +53,7 @@ func main() {
 
 	case "stop":
 		if len(args) < 2 {
-			die("usage: pmux stop <domain>")
+			die("usage: porter stop <domain>")
 		}
 		err = cmd.Stop(args[1])
 
@@ -103,6 +103,14 @@ func runCommand(args []string) error {
 			opts.Name = args[i]
 		case "--tls":
 			opts.TLS = true
+		case "-d", "--detach":
+			opts.Detach = true
+		case "--log-file":
+			if i+1 >= len(args) {
+				die("--log-file requires a value")
+			}
+			i++
+			opts.LogFile = args[i]
 		default:
 			if opts.Command == "" {
 				opts.Command = args[i]
@@ -113,7 +121,7 @@ func runCommand(args []string) error {
 	}
 
 	if opts.Command == "" {
-		die("usage: pmux run \"<command>\" [--port <n>] [--name <name>] [--tls]")
+		die("usage: porter run \"<command>\" [--port <n>] [--name <name>] [--tls]")
 	}
 
 	return cmd.Run(opts)
@@ -121,7 +129,7 @@ func runCommand(args []string) error {
 
 func proxyCommand(args []string) error {
 	if len(args) == 0 {
-		die("usage: pmux proxy <start|run|stop>")
+		die("usage: porter proxy <start|run|stop>")
 	}
 
 	opts := cmd.ProxyOptions{

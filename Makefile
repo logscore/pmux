@@ -1,4 +1,4 @@
-BIN := ./dist/pmux
+BIN := ./dist/porter
 GO := go
 
 .PHONY: build clean run

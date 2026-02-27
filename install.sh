@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="logscore/pmux"
+REPO="logscore/porter"
 INSTALL_DIR="/usr/local/bin"
-BINARY="pmux"
+BINARY="porter"
 
 # --- helpers ----------------------------------------------------------------
 
@@ -102,7 +102,7 @@ main() {
   local download_url="https://github.com/${REPO}/releases/download/${version}/${asset}"
   local checksums_url="https://github.com/${REPO}/releases/download/${version}/checksums.txt"
 
-  echo "Installing pmux ${version} (${os}/${arch})..."
+  echo "Installing porter ${version} (${os}/${arch})..."
 
   local tmpdir
   tmpdir="$(mktemp -d)"
@@ -123,7 +123,7 @@ main() {
     sudo mv "${tmpdir}/${asset}" "${INSTALL_DIR}/${BINARY}"
   fi
 
-  echo "pmux ${version} installed to ${INSTALL_DIR}/${BINARY}"
+  echo "porter ${version} installed to ${INSTALL_DIR}/${BINARY}"
 }
 
 main "$@"

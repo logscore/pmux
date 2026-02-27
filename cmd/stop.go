@@ -5,8 +5,8 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/logscore/pmux/internal/platform"
-	"github.com/logscore/pmux/pkg/config"
+	"github.com/logscore/porter/internal/platform"
+	"github.com/logscore/porter/pkg/config"
 )
 
 func Stop(domain string) error {
@@ -45,6 +45,6 @@ func Stop(domain string) error {
 		return fmt.Errorf("failed to remove route: %w", err)
 	}
 
-	fmt.Printf("done - stopped tunnel for %s\n", domain)
+	fmt.Printf("Stopped: %s\n", domain)
 	return nil
 }
