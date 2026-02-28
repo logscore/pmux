@@ -16,7 +16,7 @@ Usage:
   roxy stop <id|domain>...       Stop one or more routes
   roxy stop -a [--remove-dns]    Stop all routes and proxy
   roxy logs <id|domain>          Tail logs for a detached process
-  roxy proxy <start|stop|restart> [flags]  Manage the proxy server
+  roxy proxy <start|stop|restart|status|logs>  Manage the proxy server
 
 Run flags:
   -d, --detach       Run in the background (detached mode)
@@ -137,7 +137,7 @@ func runCommand(args []string) error {
 func stopCommand(args []string) error {
 	opts := cmd.StopOptions{}
 
-	for i := 0; i < len(args); i++ {
+	for i := range args {
 		switch args[i] {
 		case "-a", "--all":
 			opts.All = true
@@ -158,17 +158,38 @@ func stopCommand(args []string) error {
 // proxyCommand handles proxy subcommands.
 func proxyCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: roxy proxy <start|stop|restart>")
+		return fmt.Errorf("usage: roxy proxy <start|stop|restart|status|logs>")
 	}
 
+	subArgs := args[1:]
+
+	// Subcommands that have their own flags or no flags at all
+	switch args[0] {
+	case "stop":
+		return cmd.ProxyStop()
+	case "status":
+		return cmd.ProxyStatus()
+	case "logs":
+		printAll := false
+		watch := false
+		for _, a := range subArgs {
+			switch a {
+			case "-a", "--all":
+				printAll = true
+			case "-w", "--watch":
+				watch = true
+			}
+		}
+		return cmd.ProxyLogs(printAll, watch)
+	}
+
+	// Parse flags for start/restart
 	opts := cmd.ProxyOptions{
 		HTTPPort:  80,
 		HTTPSPort: 443,
 		DNSPort:   1299,
 		Detach:    true, // default to detached for start/restart
 	}
-
-	subArgs := args[1:]
 
 	for i := 0; i < len(subArgs); i++ {
 		switch subArgs[i] {
@@ -223,12 +244,10 @@ func proxyCommand(args []string) error {
 		}
 		cmd.PrintNonStandardPortNotice(opts)
 		return nil
-	case "stop":
-		return cmd.ProxyStop()
 	case "restart":
 		return cmd.ProxyRestart(opts)
 	default:
-		return fmt.Errorf("unknown proxy command: %s (expected start, stop, or restart)", args[0])
+		return fmt.Errorf("unknown proxy command: %s (expected start, stop, restart, status, or logs)", args[0])
 	}
 }
 

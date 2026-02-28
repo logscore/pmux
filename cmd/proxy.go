@@ -2,14 +2,17 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/logscore/roxy/internal/platform"
 	"github.com/logscore/roxy/internal/proxy"
+	"github.com/logscore/roxy/pkg/config"
 )
 
 type ProxyOptions struct {
@@ -192,6 +195,121 @@ func ProxyRestart(opts ProxyOptions) error {
 
 	// Foreground mode
 	return ProxyRun(opts)
+}
+
+// ProxyStatus prints info about the proxy, DNS server, and TLS.
+func ProxyStatus() error {
+	p := platform.Detect()
+	paths := platform.GetPaths(p)
+
+	// Proxy status
+	pid := proxy.ReadPid(paths.ConfigDir)
+	running := proxy.IsRunning(paths.ConfigDir)
+
+	fmt.Println()
+	if running {
+		fmt.Printf("  proxy     running (pid %d)\n", pid)
+	} else {
+		fmt.Printf("  proxy     not running\n")
+	}
+
+	// Log file
+	logPath := filepath.Join(LogsDir(paths.ConfigDir), "proxy.log")
+	if _, err := os.Stat(logPath); err == nil {
+		fmt.Printf("  logs      %s\n", logPath)
+	}
+
+	// DNS resolver
+	resolverData, err := os.ReadFile(paths.ResolverPath)
+	if err == nil {
+		fmt.Printf("  dns       configured (%s)\n", paths.ResolverPath)
+		// Extract port from resolver file
+		for line := range strings.SplitSeq(string(resolverData), "\n") {
+		    line = strings.TrimSpace(line)
+		    if addr, ok := strings.CutPrefix(line, "port "); ok {
+		        fmt.Printf("  dns port  %s\n", addr)
+		    }
+		}
+	} else {
+		fmt.Printf("  dns       not configured\n")
+	}
+
+	// TLS
+	caCertPath := filepath.Join(paths.CertsDir, "ca-cert.pem")
+	if platform.CATrusted(p, caCertPath) {
+		fmt.Printf("  tls       CA trusted\n")
+	} else if _, err := os.Stat(caCertPath); err == nil {
+		fmt.Printf("  tls       CA generated (not trusted)\n")
+	} else {
+		fmt.Printf("  tls       not configured\n")
+	}
+
+	// Routes
+	store := config.NewStore(paths.RoutesFile)
+	routes, err := store.LoadRoutes()
+	if err == nil {
+		fmt.Printf("  routes    %d active\n", len(routes))
+	}
+
+	fmt.Println()
+	return nil
+}
+
+// ProxyLogs prints the last 20 lines of the proxy log file, all lines with printAll,
+// or tails the log live with watch.
+func ProxyLogs(printAll bool, watch bool) error {
+	p := platform.Detect()
+	paths := platform.GetPaths(p)
+
+	logPath := filepath.Join(LogsDir(paths.ConfigDir), "proxy.log")
+
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		return fmt.Errorf("no proxy log file found (is the proxy running?)")
+	}
+
+	content := string(data)
+	if printAll {
+		fmt.Print(content)
+		if !watch {
+			return nil
+		}
+	}
+
+	if !printAll {
+		lines := strings.Split(strings.TrimRight(content, "\n"), "\n")
+		if len(lines) > 20 {
+			lines = lines[len(lines)-20:]
+		}
+		for _, line := range lines {
+			fmt.Println(line)
+		}
+	}
+
+	if !watch {
+		return nil
+	}
+
+	// Tail: open file and seek to end, then poll for new data
+	f, err := os.Open(logPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if _, err := f.Seek(0, io.SeekEnd); err != nil {
+		return err
+	}
+
+	for {
+		n, err := io.Copy(os.Stdout, f)
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
 }
 
 // printProxyStatus prints the proxy configuration on foreground start.

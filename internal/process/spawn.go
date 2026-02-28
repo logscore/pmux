@@ -8,7 +8,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/logscore/roxy/internal/proxy"
 	"github.com/logscore/roxy/pkg/config"
 )
 
@@ -38,19 +37,20 @@ func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, sto
 	cleanup := func() {
 		if err := store.RemoveRoute(domain); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to remove route: %v\n", err)
-			return
-		}
+		// Commented out until we add a flag to make the proxy ephemeral
+		// 	return
+		// }
 
-		// Auto-stop proxy when last route exits
-		routes, err := store.LoadRoutes()
-		if err == nil && len(routes) == 0 {
-			pid := proxy.ReadPid(configDir)
-			if pid != 0 {
-				if proc, err := os.FindProcess(pid); err == nil {
-					_ = proc.Signal(syscall.SIGTERM)
-					proxy.RemovePidFile(configDir)
-				}
-			}
+		// // Auto-stop proxy when last route exits
+		// routes, err := store.LoadRoutes()
+		// if err == nil && len(routes) == 0 {
+		// 	pid := proxy.ReadPid(configDir)
+		// 	if pid != 0 {
+		// 		if proc, err := os.FindProcess(pid); err == nil {
+		// 			_ = proc.Signal(syscall.SIGTERM)
+		// 			proxy.RemovePidFile(configDir)
+		// 		}
+		// 	}
 		}
 	}
 	defer cleanup()
