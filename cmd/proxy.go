@@ -53,7 +53,7 @@ func proxyStartDaemon(opts ProxyOptions, paths platform.Paths) error {
 	if err != nil {
 		return fmt.Errorf("failed to create proxy log file: %w", err)
 	}
-	defer logFile.Close()
+	defer func() { _ = logFile.Close() }()
 
 	// Re-exec ourselves with the "proxy start" subcommand in a detached process.
 	// Pass --no-detach so the child runs in foreground (it IS the daemon).
@@ -304,7 +304,7 @@ func ProxyLogs(printAll bool, watch bool) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := f.Seek(0, io.SeekEnd); err != nil {
 		return err

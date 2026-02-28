@@ -177,7 +177,7 @@ func (s *Server) Run() error {
 func (s *Server) shutdown() error {
 	s.mu.Lock()
 	for domain, ln := range s.tcpListeners {
-		ln.Close()
+		_ = ln.Close()
 		delete(s.tcpListeners, domain)
 	}
 	s.mu.Unlock()
@@ -187,12 +187,12 @@ func (s *Server) shutdown() error {
 
 	if s.httpServer != nil {
 		if err := s.httpServer.Shutdown(ctx); err != nil {
-			s.httpServer.Close()
+			_ = s.httpServer.Close()
 		}
 	}
 	if s.httpsServer != nil {
 		if err := s.httpsServer.Shutdown(ctx); err != nil {
-			s.httpsServer.Close()
+			_ = s.httpsServer.Close()
 		}
 	}
 	return nil
@@ -336,7 +336,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request, upstrea
 		log.Printf("websocket proxy: client upgrade: %v", err)
 		return
 	}
-	defer clientConn.Close()
+	defer func() { _ = clientConn.Close() }()
 
 	// Dial the upstream as a fresh WebSocket connection (no compression)
 	dialer := websocket.Dialer{}
@@ -355,7 +355,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request, upstrea
 		log.Printf("websocket proxy: upstream dial ws://%s%s: %v", upstream, r.URL.RequestURI(), err)
 		return
 	}
-	defer upstreamConn.Close()
+	defer func() { _ = upstreamConn.Close() }()
 
 	// Bidirectional message copy
 	errc := make(chan error, 2)
@@ -426,31 +426,31 @@ func (s *Server) startTCPListenerLocked(route Route) {
 }
 
 func (s *Server) handleTCP(src net.Conn, targetPort int) {
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	dst, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", targetPort), tcpDialTimeout)
 	if err != nil {
 		log.Printf("tcp proxy: dial failed: %v", err)
 		return
 	}
-	defer dst.Close()
+	defer func() { _ = dst.Close() }()
 
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		io.Copy(dst, src)
+		_, _ = io.Copy(dst, src)
 		// Signal dst that no more data is coming from src
 		if tc, ok := dst.(*net.TCPConn); ok {
-			tc.CloseWrite()
+			_ = tc.CloseWrite()
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		io.Copy(src, dst)
+		_, _ = io.Copy(src, dst)
 		// Signal src that no more data is coming from dst
 		if tc, ok := src.(*net.TCPConn); ok {
-			tc.CloseWrite()
+			_ = tc.CloseWrite()
 		}
 	}()
 	wg.Wait()
@@ -527,7 +527,7 @@ func (s *Server) reconcileTCPListeners() {
 	s.mu.Lock()
 	for domain, ln := range s.tcpListeners {
 		if !activeTCP[domain] {
-			ln.Close()
+			_ = ln.Close()
 			delete(s.tcpListeners, domain)
 			log.Printf("tcp proxy: stopped listener for removed route %s", domain)
 		}
@@ -619,14 +619,14 @@ func ReadPid(configDir string) int {
 		return 0
 	}
 	var pid int
-	fmt.Sscanf(string(data), "%d", &pid)
+	_, _ = fmt.Sscanf(string(data), "%d", &pid)
 	return pid
 }
 
 // RemovePidFile removes the PID file and state file.
 func RemovePidFile(configDir string) {
-	os.Remove(PidFile(configDir))
-	os.Remove(stateFile(configDir))
+	_ = os.Remove(PidFile(configDir))
+	_ = os.Remove(stateFile(configDir))
 }
 
 // IsRunning checks if the proxy is reachable on its HTTP port.

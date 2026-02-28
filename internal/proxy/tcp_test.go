@@ -23,7 +23,7 @@ func freePort(t *testing.T) int {
 		t.Fatalf("freePort: %v", err)
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	_ = ln.Close()
 	return port
 }
 
@@ -42,12 +42,12 @@ func tcpEchoServer(t *testing.T, port int) (net.Listener, func()) {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
-				io.Copy(c, c)
+				defer func() { _ = c.Close() }()
+				_, _ = io.Copy(c, c)
 			}(conn)
 		}
 	}()
-	return ln, func() { ln.Close() }
+	return ln, func() { _ = ln.Close() }
 }
 
 // tcpSinkServer starts a TCP server that reads all data, closes, and sends
@@ -66,13 +66,13 @@ func tcpSinkServer(t *testing.T, port int) (net.Listener, <-chan int, func()) {
 				return
 			}
 			go func(c net.Conn) {
-				defer c.Close()
+				defer func() { _ = c.Close() }()
 				n, _ := io.Copy(io.Discard, c)
 				ch <- int(n)
 			}(conn)
 		}
 	}()
-	return ln, ch, func() { ln.Close() }
+	return ln, ch, func() { _ = ln.Close() }
 }
 
 // setupTCPProxy creates a Server with a single TCP route and starts its listener.
@@ -93,7 +93,7 @@ func setupTCPProxy(t *testing.T, listenPort, targetPort int, domain string) (*Se
 	cleanup := func() {
 		srv.mu.Lock()
 		for _, ln := range srv.tcpListeners {
-			ln.Close()
+			_ = ln.Close()
 		}
 		srv.mu.Unlock()
 	}
@@ -123,7 +123,7 @@ func TestTCPEchoThroughProxy(t *testing.T) {
 	defer cleanupProxy()
 
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	messages := []string{
 		"hello\n",
@@ -162,7 +162,7 @@ func TestTCPLargePayload(t *testing.T) {
 	defer cleanupProxy()
 
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// 1MB payload
 	payload := bytes.Repeat([]byte("ABCDEFGHIJ"), 100_000)
@@ -177,7 +177,7 @@ func TestTCPLargePayload(t *testing.T) {
 		_, writeErr = conn.Write(payload)
 		// Half-close the write side so the echo server sees EOF
 		if tc, ok := conn.(*net.TCPConn); ok {
-			tc.CloseWrite()
+			_ = tc.CloseWrite()
 		}
 	}()
 	go func() {
@@ -208,7 +208,7 @@ func TestTCPHalfClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	serverDone := make(chan struct{})
 	go func() {
@@ -217,14 +217,14 @@ func TestTCPHalfClose(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Read until client closes its write side
 		data, _ := io.ReadAll(conn)
 
 		// Then send back the length as a response
 		response := fmt.Sprintf("received:%d", len(data))
-		conn.Write([]byte(response))
+		_, _ = conn.Write([]byte(response))
 	}()
 
 	_, cleanupProxy := setupTCPProxy(t, listenPort, upstreamPort, "halfclose.test")
@@ -234,12 +234,12 @@ func TestTCPHalfClose(t *testing.T) {
 
 	// Send data then close write side
 	payload := []byte("half-close-test-payload")
-	conn.Write(payload)
-	conn.(*net.TCPConn).CloseWrite()
+	_, _ = conn.Write(payload)
+	_ = conn.(*net.TCPConn).CloseWrite()
 
 	// Read the response
 	resp, err := io.ReadAll(conn)
-	conn.Close()
+	_ = conn.Close()
 	if err != nil {
 		t.Fatalf("read response: %v", err)
 	}
@@ -276,7 +276,7 @@ func TestTCPConcurrentConnections(t *testing.T) {
 				errors <- fmt.Errorf("conn %d: dial: %v", id, err)
 				return
 			}
-			defer conn.Close()
+			defer func() { _ = conn.Close() }()
 
 			msg := fmt.Sprintf("connection-%d\n", id)
 			_, err = conn.Write([]byte(msg))
@@ -317,14 +317,14 @@ func TestTCPUpstreamUnreachable(t *testing.T) {
 	defer cleanupProxy()
 
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Write something to trigger the proxy to dial upstream
-	conn.Write([]byte("hello"))
+	_, _ = conn.Write([]byte("hello"))
 
 	// The connection should be closed by the proxy since upstream is unreachable.
 	// Set a read deadline so we don't hang forever.
-	conn.SetReadDeadline(time.Now().Add(6 * time.Second))
+	_ = conn.SetReadDeadline(time.Now().Add(6 * time.Second))
 	buf := make([]byte, 1024)
 	_, err := conn.Read(buf)
 
@@ -378,7 +378,7 @@ func TestTCPDuplicateListenerPrevention(t *testing.T) {
 	defer func() {
 		srv.mu.Lock()
 		for _, ln := range srv.tcpListeners {
-			ln.Close()
+			_ = ln.Close()
 		}
 		srv.mu.Unlock()
 	}()
@@ -396,12 +396,12 @@ func TestTCPDuplicateListenerPrevention(t *testing.T) {
 
 	// Verify it still works
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	msg := "still-works\n"
-	conn.Write([]byte(msg))
+	_, _ = conn.Write([]byte(msg))
 	buf := make([]byte, len(msg))
-	io.ReadFull(conn, buf)
+	_, _ = io.ReadFull(conn, buf)
 	if string(buf) != msg {
 		t.Errorf("after duplicate start: got %q, want %q", buf, msg)
 	}
@@ -437,19 +437,19 @@ func TestTCPReconcileAddRoute(t *testing.T) {
 	defer func() {
 		srv.mu.Lock()
 		for _, ln := range srv.tcpListeners {
-			ln.Close()
+			_ = ln.Close()
 		}
 		srv.mu.Unlock()
 	}()
 
 	// Verify the new listener works
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	msg := "reconciled\n"
-	conn.Write([]byte(msg))
+	_, _ = conn.Write([]byte(msg))
 	buf := make([]byte, len(msg))
-	io.ReadFull(conn, buf)
+	_, _ = io.ReadFull(conn, buf)
 	if string(buf) != msg {
 		t.Errorf("reconcile add: got %q, want %q", buf, msg)
 	}
@@ -475,7 +475,7 @@ func TestTCPReconcileRemoveRoute(t *testing.T) {
 
 	// Verify it's listening
 	conn := dialProxy(t, listenPort)
-	conn.Close()
+	_ = conn.Close()
 
 	// Remove the route and reconcile
 	srv.mu.Lock()
@@ -511,7 +511,7 @@ func TestTCPPostgresProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("pg server listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	serverReady := make(chan struct{})
 	serverGotStartup := make(chan bool, 1)
@@ -522,7 +522,7 @@ func TestTCPPostgresProtocol(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		// Read the StartupMessage
 		// First 4 bytes: message length (int32, includes self)
@@ -554,7 +554,7 @@ func TestTCPPostgresProtocol(t *testing.T) {
 			0, 0, 0, 8, // length (int32, includes self)
 			0, 0, 0, 0, // auth ok status
 		}
-		conn.Write(authOk)
+		_, _ = conn.Write(authOk)
 
 		// Send ReadyForQuery: 'Z' + length(5) + 'I' (idle)
 		ready := []byte{
@@ -562,7 +562,7 @@ func TestTCPPostgresProtocol(t *testing.T) {
 			0, 0, 0, 5, // length
 			'I', // transaction status: idle
 		}
-		conn.Write(ready)
+		_, _ = conn.Write(ready)
 	}()
 
 	<-serverReady
@@ -572,8 +572,8 @@ func TestTCPPostgresProtocol(t *testing.T) {
 
 	// Simulate Postgres client connecting through proxy
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 
 	// Build StartupMessage
 	// Protocol version 3.0 (major=3, minor=0) -> 196608
@@ -581,8 +581,8 @@ func TestTCPPostgresProtocol(t *testing.T) {
 	params := []byte("user\x00postgres\x00database\x00testdb\x00\x00")
 	msgLen := int32(4 + 4 + len(params)) // length + version + params
 	var startupBuf bytes.Buffer
-	binary.Write(&startupBuf, binary.BigEndian, msgLen)
-	binary.Write(&startupBuf, binary.BigEndian, int32(196608)) // version 3.0
+	_ = binary.Write(&startupBuf, binary.BigEndian, msgLen)
+	_ = binary.Write(&startupBuf, binary.BigEndian, int32(196608)) // version 3.0
 	startupBuf.Write(params)
 
 	_, err = conn.Write(startupBuf.Bytes())
@@ -652,7 +652,7 @@ func TestTCPRedisProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("redis server listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 
 	store := make(map[string]string)
 
@@ -661,7 +661,7 @@ func TestTCPRedisProtocol(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
 		reader := bufio.NewReader(conn)
 
@@ -678,7 +678,7 @@ func TestTCPRedisProtocol(t *testing.T) {
 			}
 
 			var count int
-			fmt.Sscanf(line[1:], "%d", &count)
+			_, _ = fmt.Sscanf(line[1:], "%d", &count)
 
 			args := make([]string, count)
 			for i := 0; i < count; i++ {
@@ -689,7 +689,7 @@ func TestTCPRedisProtocol(t *testing.T) {
 				}
 				sizeLine = strings.TrimRight(sizeLine, "\r\n")
 				var size int
-				fmt.Sscanf(sizeLine[1:], "%d", &size)
+				_, _ = fmt.Sscanf(sizeLine[1:], "%d", &size)
 
 				// Read bulk string data
 				data := make([]byte, size+2) // +2 for \r\n
@@ -706,12 +706,12 @@ func TestTCPRedisProtocol(t *testing.T) {
 			cmd := strings.ToUpper(args[0])
 			switch cmd {
 			case "PING":
-				conn.Write([]byte("+PONG\r\n"))
+				_, _ = conn.Write([]byte("+PONG\r\n"))
 
 			case "SET":
 				if len(args) >= 3 {
 					store[args[1]] = args[2]
-					conn.Write([]byte("+OK\r\n"))
+					_, _ = conn.Write([]byte("+OK\r\n"))
 				}
 
 			case "GET":
@@ -719,9 +719,9 @@ func TestTCPRedisProtocol(t *testing.T) {
 					val, ok := store[args[1]]
 					if ok {
 						resp := fmt.Sprintf("$%d\r\n%s\r\n", len(val), val)
-						conn.Write([]byte(resp))
+						_, _ = conn.Write([]byte(resp))
 					} else {
-						conn.Write([]byte("$-1\r\n"))
+						_, _ = conn.Write([]byte("$-1\r\n"))
 					}
 				}
 			}
@@ -732,8 +732,8 @@ func TestTCPRedisProtocol(t *testing.T) {
 	defer cleanupProxy()
 
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(5 * time.Second))
+	defer func() { _ = conn.Close() }()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 
 	reader := bufio.NewReader(conn)
 
@@ -808,7 +808,7 @@ func TestTCPBinaryIntegrity(t *testing.T) {
 	defer cleanupProxy()
 
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	// Build a payload containing every byte value 0x00-0xFF, repeated
 	payload := make([]byte, 256*4)
@@ -823,9 +823,9 @@ func TestTCPBinaryIntegrity(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		conn.Write(payload)
+		_, _ = conn.Write(payload)
 		if tc, ok := conn.(*net.TCPConn); ok {
-			tc.CloseWrite()
+			_ = tc.CloseWrite()
 		}
 	}()
 	go func() {
@@ -878,7 +878,7 @@ func TestTCPMultipleRoutes(t *testing.T) {
 	defer func() {
 		srv.mu.Lock()
 		for _, ln := range srv.tcpListeners {
-			ln.Close()
+			_ = ln.Close()
 		}
 		srv.mu.Unlock()
 	}()
@@ -886,10 +886,10 @@ func TestTCPMultipleRoutes(t *testing.T) {
 	// Test route 1
 	conn1 := dialProxy(t, listen1Port)
 	msg1 := "route-one\n"
-	conn1.Write([]byte(msg1))
+	_, _ = conn1.Write([]byte(msg1))
 	buf1 := make([]byte, len(msg1))
-	io.ReadFull(conn1, buf1)
-	conn1.Close()
+	_, _ = io.ReadFull(conn1, buf1)
+	_ = conn1.Close()
 	if string(buf1) != msg1 {
 		t.Errorf("route 1: got %q, want %q", buf1, msg1)
 	}
@@ -897,10 +897,10 @@ func TestTCPMultipleRoutes(t *testing.T) {
 	// Test route 2
 	conn2 := dialProxy(t, listen2Port)
 	msg2 := "route-two\n"
-	conn2.Write([]byte(msg2))
+	_, _ = conn2.Write([]byte(msg2))
 	buf2 := make([]byte, len(msg2))
-	io.ReadFull(conn2, buf2)
-	conn2.Close()
+	_, _ = io.ReadFull(conn2, buf2)
+	_ = conn2.Close()
 	if string(buf2) != msg2 {
 		t.Errorf("route 2: got %q, want %q", buf2, msg2)
 	}
@@ -927,7 +927,7 @@ func TestTCPMixedRoutes(t *testing.T) {
 	defer func() {
 		srv.mu.Lock()
 		for _, ln := range srv.tcpListeners {
-			ln.Close()
+			_ = ln.Close()
 		}
 		srv.mu.Unlock()
 	}()
@@ -942,12 +942,12 @@ func TestTCPMixedRoutes(t *testing.T) {
 
 	// Verify TCP route works
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	msg := "mixed-route-tcp\n"
-	conn.Write([]byte(msg))
+	_, _ = conn.Write([]byte(msg))
 	buf := make([]byte, len(msg))
-	io.ReadFull(conn, buf)
+	_, _ = io.ReadFull(conn, buf)
 	if string(buf) != msg {
 		t.Errorf("mixed route TCP: got %q, want %q", buf, msg)
 	}
@@ -972,15 +972,15 @@ func TestTCPRapidConnectDisconnect(t *testing.T) {
 		if err != nil {
 			t.Fatalf("iteration %d: dial: %v", i, err)
 		}
-		conn.Close()
+		_ = conn.Close()
 	}
 
 	// After all rapid connections, verify the proxy still works
 	conn := dialProxy(t, listenPort)
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	msg := "still-alive\n"
-	conn.Write([]byte(msg))
+	_, _ = conn.Write([]byte(msg))
 	buf := make([]byte, len(msg))
 	_, err := io.ReadFull(conn, buf)
 	if err != nil {
@@ -1006,8 +1006,8 @@ func TestTCPOneWayDataToUpstream(t *testing.T) {
 	conn := dialProxy(t, listenPort)
 
 	payload := bytes.Repeat([]byte("X"), 50_000)
-	conn.Write(payload)
-	conn.Close()
+	_, _ = conn.Write(payload)
+	_ = conn.Close()
 
 	select {
 	case n := <-bytesReceived:

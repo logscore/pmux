@@ -39,7 +39,7 @@ func TestFind_ExactPin_ReturnsRequestedPort(t *testing.T) {
 		t.Fatalf("failed to find free port for test: %v", err)
 	}
 	freePort := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	_ = ln.Close()
 
 	p, err := Find(freePort, "nonexistent-routes.json")
 	if err != nil {
@@ -56,7 +56,7 @@ func TestFind_ExactPin_ErrorWhenBusy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	busyPort := ln.Addr().(*net.TCPAddr).Port
 
 	_, err = Find(busyPort, "nonexistent-routes.json")
@@ -172,7 +172,7 @@ func TestCheckAvailable_FreePort(t *testing.T) {
 		t.Fatalf("failed to find free port: %v", err)
 	}
 	freePort := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	_ = ln.Close()
 
 	if err := checkAvailable(freePort); err != nil {
 		t.Fatalf("expected port %d to be available: %v", freePort, err)
@@ -184,7 +184,7 @@ func TestCheckAvailable_BusyPort(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to listen: %v", err)
 	}
-	defer ln.Close()
+	defer func() { _ = ln.Close() }()
 	busyPort := ln.Addr().(*net.TCPAddr).Port
 
 	if err := checkAvailable(busyPort); err == nil {
@@ -199,7 +199,7 @@ func TestLoadClaimedPorts_ValidFile(t *testing.T) {
 		Port int `json:"port"`
 	}{{Port: 3000}, {Port: 4000}, {Port: 5000}}
 	data, _ := json.Marshal(routes)
-	os.WriteFile(routesFile, data, 0644)
+	_ = os.WriteFile(routesFile, data, 0644)
 
 	claimed := loadClaimedPorts(routesFile)
 	for _, r := range routes {
@@ -219,7 +219,7 @@ func TestLoadClaimedPorts_MissingFile(t *testing.T) {
 func TestLoadClaimedPorts_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	routesFile := filepath.Join(dir, "routes.json")
-	os.WriteFile(routesFile, []byte("not json"), 0644)
+	_ = os.WriteFile(routesFile, []byte("not json"), 0644)
 
 	claimed := loadClaimedPorts(routesFile)
 	if len(claimed) != 0 {
@@ -243,7 +243,7 @@ func BenchmarkFind_ExactPin(b *testing.B) {
 		b.Fatalf("failed to find free port: %v", err)
 	}
 	freePort := ln.Addr().(*net.TCPAddr).Port
-	ln.Close()
+	_ = ln.Close()
 
 	for range b.N {
 		p, err := Find(freePort, "nonexistent-routes.json")

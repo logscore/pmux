@@ -15,6 +15,10 @@ run: build
 clean:
 	rm -f $(BIN)
 
+## lint: run linter
+lint:
+	golangci-lint run
+
 ## dev: build in watch mode using fswatch (requires fswatch)
 dev:
 	@echo "watching for changes..."

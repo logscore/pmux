@@ -65,7 +65,7 @@ func TestProxyIsolatesCompression(t *testing.T) {
 		if err != nil {
 			return
 		}
-		conn.Close()
+		_ = conn.Close()
 	}))
 	defer upstream.Close()
 
@@ -81,8 +81,8 @@ func TestProxyIsolatesCompression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial through proxy: %v", err)
 	}
-	conn.Close()
-	resp.Body.Close()
+	_ = conn.Close()
+	_ = resp.Body.Close()
 
 	mu.Lock()
 	ext := receivedExtensions
@@ -111,7 +111,7 @@ func TestWebSocketEchoThroughProxy(t *testing.T) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		for {
 			mt, msg, err := conn.ReadMessage()
 			if err != nil {
@@ -136,8 +136,8 @@ func TestWebSocketEchoThroughProxy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("dial through proxy: %v", err)
 	}
-	defer conn.Close()
-	resp.Body.Close()
+	defer func() { _ = conn.Close() }()
+	_ = resp.Body.Close()
 
 	messages := []string{
 		"hello",
@@ -172,7 +172,7 @@ func TestDirectConnectionNegotiatesCompression(t *testing.T) {
 		if err != nil {
 			return
 		}
-		conn.Close()
+		_ = conn.Close()
 	}))
 	defer upstream.Close()
 
@@ -181,10 +181,10 @@ func TestDirectConnectionNegotiatesCompression(t *testing.T) {
 	if err != nil {
 		t.Fatalf("direct dial: %v", err)
 	}
-	conn.Close()
+	_ = conn.Close()
 
 	ext := resp.Header.Get("Sec-WebSocket-Extensions")
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if !strings.Contains(ext, "permessage-deflate") {
 		t.Errorf("direct connection should negotiate compression; "+
@@ -217,7 +217,7 @@ func TestNonWebSocketRequestPreservesHeaders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if receivedExtensions != "permessage-deflate" {
 		t.Errorf("non-upgrade request: Sec-WebSocket-Extensions = %q; "+
@@ -233,7 +233,7 @@ func parsePort(t *testing.T, rawURL string) int {
 		t.Fatalf("cannot parse port from URL %q", rawURL)
 	}
 	var port int
-	fmt.Sscanf(parts[len(parts)-1], "%d", &port)
+	_, _ = fmt.Sscanf(parts[len(parts)-1], "%d", &port)
 	if port == 0 {
 		t.Fatalf("port is 0 in URL %q", rawURL)
 	}

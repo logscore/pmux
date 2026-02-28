@@ -299,7 +299,7 @@ func (pw *prefixWriter) Write(p []byte) (int, error) {
 		}
 
 		line := pw.buf[:idx+1]
-		fmt.Fprintf(pw.out, "%s%s", pw.prefix, line)
+		_, _ = fmt.Fprintf(pw.out, "%s%s", pw.prefix, line)
 		pw.buf = pw.buf[idx+1:]
 	}
 

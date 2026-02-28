@@ -113,7 +113,7 @@ func Run(opts RunOptions) error {
 	// Check for domain conflict with an already-running process
 	if existing := store.FindRoute(dom); existing != nil {
 		return fmt.Errorf(
-			"domain %s is already in use (pid %d, port %d)\n\n  To run another service on this project, use --name:\n\n    roxy run %q --name <service-name>\n",
+			"domain %s is already in use (pid %d, port %d); to run another service on this project, use --name: roxy run %q --name <service-name>",
 			dom, existing.PID, existing.Port, opts.Command,
 		)
 	}
@@ -156,7 +156,7 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, id string, a
 	if err != nil {
 		return fmt.Errorf("failed to create log file: %w", err)
 	}
-	defer logFile.Close()
+	defer func() { _ = logFile.Close() }()
 
 	// Re-exec: roxy run "<command>" [flags] (without --detach/-d)
 	exePath, err := os.Executable()

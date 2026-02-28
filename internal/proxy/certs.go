@@ -76,9 +76,7 @@ func GenerateServerCert(caCertPath, caKeyPath, certPath, keyPath string, hosts [
 		},
 	}
 
-	for _, h := range hosts {
-		template.DNSNames = append(template.DNSNames, h)
-	}
+	template.DNSNames = append(template.DNSNames, hosts...)
 
 	certDER, err := x509.CreateCertificate(rand.Reader, template, caCert, &key.PublicKey, caKey)
 	if err != nil {
@@ -126,7 +124,7 @@ func writePEM(path, pemType string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	return pem.Encode(f, &pem.Block{Type: pemType, Bytes: data})
 }

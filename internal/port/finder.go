@@ -151,7 +151,7 @@ func checkAvailable(port int) error {
 	if err != nil {
 		return err
 	}
-	ln.Close()
+	_ = ln.Close()
 	return nil
 }
 

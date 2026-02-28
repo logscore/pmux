@@ -69,10 +69,10 @@ done:
 // Stop shuts down the DNS server.
 func (s *Server) Stop() {
 	if s.udp != nil {
-		s.udp.Shutdown()
+		_ = s.udp.Shutdown()
 	}
 	if s.tcp != nil {
-		s.tcp.Shutdown()
+		_ = s.tcp.Shutdown()
 	}
 }
 
@@ -96,7 +96,7 @@ func (s *Server) handleTest(w dns.ResponseWriter, r *dns.Msg) {
 		}
 	}
 
-	w.WriteMsg(msg)
+	_ = w.WriteMsg(msg)
 }
 
 // handleForward proxies non-.test queries to the upstream resolver.
@@ -113,7 +113,7 @@ func (s *Server) handleForward(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	w.WriteMsg(resp)
+	_ = w.WriteMsg(resp)
 }
 
 // findUpstream discovers the system's DNS resolver.

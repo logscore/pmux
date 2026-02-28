@@ -29,7 +29,7 @@ func Logs(target string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Print existing content
 	if _, err := io.Copy(os.Stdout, f); err != nil {
