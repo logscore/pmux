@@ -242,7 +242,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		},
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Printf("proxy error [%s -> %s]: %v", host, upstream, err)
+			log.Printf("proxy error [%s → %s]: %v", host, upstream, err)
 			http.Error(w, fmt.Sprintf("roxy: upstream unreachable (%v)", err), http.StatusBadGateway)
 		},
 	}
@@ -412,7 +412,7 @@ func (s *Server) startTCPListenerLocked(route Route) {
 	}
 
 	s.tcpListeners[route.Domain] = ln
-	log.Printf("tcp proxy: %s (:%d) -> localhost:%d", route.Domain, route.ListenPort, route.Port)
+	log.Printf("tcp proxy: %s (:%d) → localhost:%d", route.Domain, route.ListenPort, route.Port)
 
 	go func() {
 		for {
@@ -567,14 +567,49 @@ func (s *Server) buildTLSConfig() (*tls.Config, error) {
 	}, nil
 }
 
+// ProxyState is the persisted proxy daemon state.
+type ProxyState struct {
+	PID       int  `json:"pid"`
+	HTTPPort  int  `json:"http_port"`
+	HTTPSPort int  `json:"https_port"`
+	DNSPort   int  `json:"dns_port"`
+	TLS       bool `json:"tls"`
+}
+
 // PidFile returns the path to the proxy PID file.
 func PidFile(configDir string) string {
 	return filepath.Join(configDir, "proxy.pid")
 }
 
+func stateFile(configDir string) string {
+	return filepath.Join(configDir, "proxy.state.json")
+}
+
 // WritePidFile writes the current process PID.
 func WritePidFile(configDir string) error {
 	return os.WriteFile(PidFile(configDir), []byte(fmt.Sprintf("%d", os.Getpid())), 0600)
+}
+
+// WriteState writes the proxy state to disk.
+func WriteState(configDir string, state ProxyState) error {
+	data, err := json.Marshal(state)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(stateFile(configDir), data, 0600)
+}
+
+// ReadState reads the proxy state from disk.
+func ReadState(configDir string) *ProxyState {
+	data, err := os.ReadFile(stateFile(configDir))
+	if err != nil {
+		return nil
+	}
+	var state ProxyState
+	if err := json.Unmarshal(data, &state); err != nil {
+		return nil
+	}
+	return &state
 }
 
 // ReadPid reads the proxy PID from disk. Returns 0 if not found.
@@ -588,9 +623,10 @@ func ReadPid(configDir string) int {
 	return pid
 }
 
-// RemovePidFile removes the PID file.
+// RemovePidFile removes the PID file and state file.
 func RemovePidFile(configDir string) {
 	os.Remove(PidFile(configDir))
+	os.Remove(stateFile(configDir))
 }
 
 // IsRunning checks if the proxy is reachable on its HTTP port.

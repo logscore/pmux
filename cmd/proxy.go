@@ -124,6 +124,16 @@ func ProxyRun(opts ProxyOptions) error {
 	}
 	defer proxy.RemovePidFile(paths.ConfigDir)
 
+	if err := proxy.WriteState(paths.ConfigDir, proxy.ProxyState{
+		PID:       os.Getpid(),
+		HTTPPort:  opts.HTTPPort,
+		HTTPSPort: opts.HTTPSPort,
+		DNSPort:   opts.DNSPort,
+		TLS:       opts.TLS,
+	}); err != nil {
+		return fmt.Errorf("failed to write proxy state: %w", err)
+	}
+
 	printProxyStatus(opts)
 
 	return srv.Run()
@@ -202,53 +212,52 @@ func ProxyStatus() error {
 	p := platform.Detect()
 	paths := platform.GetPaths(p)
 
-	// Proxy status
-	pid := proxy.ReadPid(paths.ConfigDir)
 	running := proxy.IsRunning(paths.ConfigDir)
+	state := proxy.ReadState(paths.ConfigDir)
 
 	fmt.Println()
-	if running {
-		fmt.Printf("  proxy     running (pid %d)\n", pid)
+	if running && state != nil {
+		fmt.Printf("  proxy       running (pid %d)\n", state.PID)
+		fmt.Printf("  http port   %d\n", state.HTTPPort)
+		fmt.Printf("  https port  %d\n", state.HTTPSPort)
+		fmt.Printf("  dns port    %d\n", state.DNSPort)
+	} else if running {
+		pid := proxy.ReadPid(paths.ConfigDir)
+		fmt.Printf("  proxy       running (pid %d)\n", pid)
 	} else {
-		fmt.Printf("  proxy     not running\n")
+		fmt.Printf("  proxy       not running\n")
 	}
 
 	// Log file
 	logPath := filepath.Join(LogsDir(paths.ConfigDir), "proxy.log")
 	if _, err := os.Stat(logPath); err == nil {
-		fmt.Printf("  logs      %s\n", logPath)
+		fmt.Printf("  logs        %s\n", logPath)
 	}
 
 	// DNS resolver
-	resolverData, err := os.ReadFile(paths.ResolverPath)
-	if err == nil {
-		fmt.Printf("  dns       configured (%s)\n", paths.ResolverPath)
-		// Extract port from resolver file
-		for line := range strings.SplitSeq(string(resolverData), "\n") {
-		    line = strings.TrimSpace(line)
-		    if addr, ok := strings.CutPrefix(line, "port "); ok {
-		        fmt.Printf("  dns port  %s\n", addr)
-		    }
-		}
+	if _, err := os.ReadFile(paths.ResolverPath); err == nil {
+		fmt.Printf("  resolver    %s\n", paths.ResolverPath)
 	} else {
-		fmt.Printf("  dns       not configured\n")
+		fmt.Printf("  resolver    not configured\n")
 	}
 
 	// TLS
 	caCertPath := filepath.Join(paths.CertsDir, "ca-cert.pem")
-	if platform.CATrusted(p, caCertPath) {
-		fmt.Printf("  tls       CA trusted\n")
-	} else if _, err := os.Stat(caCertPath); err == nil {
-		fmt.Printf("  tls       CA generated (not trusted)\n")
+	if state != nil && state.TLS {
+		if platform.CATrusted(p, caCertPath) {
+			fmt.Printf("  tls         CA trusted\n")
+		} else if _, err := os.Stat(caCertPath); err == nil {
+			fmt.Printf("  tls         CA generated (not trusted)\n")
+		}
 	} else {
-		fmt.Printf("  tls       not configured\n")
+		fmt.Printf("  tls         disabled\n")
 	}
 
 	// Routes
 	store := config.NewStore(paths.RoutesFile)
 	routes, err := store.LoadRoutes()
 	if err == nil {
-		fmt.Printf("  routes    %d active\n", len(routes))
+		fmt.Printf("  routes      %d active\n", len(routes))
 	}
 
 	fmt.Println()

@@ -17,13 +17,14 @@ import (
 )
 
 type RunOptions struct {
-	Command   string
-	StartPort int
-	Name      string
-	TLS       bool
-	Detach    bool
-	LogFile   string
-	ID        string // internal: passed from parent when re-execing in detach mode
+	Command    string
+	StartPort  int
+	Name       string
+	TLS        bool
+	Detach     bool
+	LogFile    string
+	ID         string // internal: passed from parent when re-execing in detach mode
+	ListenPort int    // TCP mode: proxy listens on this port and forwards to the service
 }
 
 // LogsDir returns the path to the logs directory.
@@ -132,17 +133,16 @@ func Run(opts RunOptions) error {
 		return runDetached(opts, paths, dom, id, assignedPort, scheme)
 	}
 
-	url := fmt.Sprintf("%s://%s", scheme, dom)
-
 	fmt.Println()
-	fmt.Printf("  %s\n", url)
-	// fmt.Println()
-	// fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
-	// fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
-	// fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
+	if opts.ListenPort > 0 {
+		fmt.Printf("  %s (tcp :%d → :%d)\n", dom, opts.ListenPort, assignedPort)
+	} else {
+		url := fmt.Sprintf("%s://%s", scheme, dom)
+		fmt.Printf("  %s\n", url)
+	}
 	fmt.Println()
 
-	return process.Run(id, opts.Command, assignedPort, dom, opts.TLS, store, paths.ConfigDir, opts.LogFile)
+	return process.Run(id, opts.Command, assignedPort, dom, opts.TLS, opts.ListenPort, store, paths.ConfigDir, opts.LogFile)
 }
 
 func runDetached(opts RunOptions, paths platform.Paths, dom string, id string, assignedPort int, scheme string) error {
@@ -172,6 +172,9 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, id string, a
 	if opts.TLS {
 		args = append(args, "--tls")
 	}
+	if opts.ListenPort > 0 {
+		args = append(args, "--listen-port", fmt.Sprintf("%d", opts.ListenPort))
+	}
 	// Pass internal flags so the child records them in the route
 	args = append(args, "--log-file", logPath)
 	args = append(args, "--id", id)
@@ -186,15 +189,15 @@ func runDetached(opts RunOptions, paths platform.Paths, dom string, id string, a
 		return fmt.Errorf("failed to start detached process: %w", err)
 	}
 
-	url := fmt.Sprintf("%s://%s", scheme, dom)
-
 	fmt.Println()
-	fmt.Printf("  %s\n", url)
+	if opts.ListenPort > 0 {
+		fmt.Printf("  %s (tcp :%d → :%d)\n", dom, opts.ListenPort, assignedPort)
+	} else {
+		url := fmt.Sprintf("%s://%s", scheme, dom)
+		fmt.Printf("  %s\n", url)
+	}
 	fmt.Println()
-	// fmt.Printf("  \x1b[90mid\x1b[0m      %s\n", id)
-	// fmt.Printf("  \x1b[90mport\x1b[0m    %d\n", assignedPort)
 	fmt.Printf("  \x1b[90mpid\x1b[0m     %d\n", cmd.Process.Pid)
-	// fmt.Printf("  \x1b[90mcmd\x1b[0m     %s\n", opts.Command)
 	fmt.Printf("  \x1b[90mlogs\x1b[0m    %s\n", logPath)
 	fmt.Println()
 

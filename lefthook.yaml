@@ -1,0 +1,6 @@
+pre-commit:
+  commands:
+    format:
+      run: gofmt -l . && git diff --exit-code
+    lint:
+      run: golangci-lint run

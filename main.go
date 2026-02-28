@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/logscore/roxy/cmd"
+	"github.com/logscore/roxy/pkg/config"
 )
 
 const usage = `roxy - dev server port multiplexer with subdomain routing
 
 Usage:
+  roxy run -a                     Run all services from roxy.yaml
+  roxy run <service>             Run a single service from roxy.yaml
   roxy run "<command>" [flags]   Run command with auto port/domain
   roxy list                      List active routes
   roxy stop <id|domain>...       Stop one or more routes
@@ -19,10 +23,11 @@ Usage:
   roxy proxy <start|stop|restart|status|logs>  Manage the proxy server
 
 Run flags:
-  -d, --detach       Run in the background (detached mode)
-  -p, --port <n>     Start scanning from this port (default: 3000)
-  -n, --name <name>  Override subdomain name
-  --tls              Enable HTTPS for this process
+  -d, --detach           Run in the background (detached mode)
+  -p, --port <n>         Pin to an exact port (default: random)
+  -n, --name <name>      Override subdomain name
+  --tls                  Enable HTTPS for this process
+  --listen-port <n>      TCP mode: proxy listens on this port, forwards to service
 
 Stop flags:
   -a, --all          Stop all routes and the proxy
@@ -58,7 +63,7 @@ func main() {
 
 	case "logs":
 		if len(args) < 2 {
-			die("usage: roxy logs <id|domain>")
+			die(logsUsage)
 		}
 		err = cmd.Logs(args[1])
 
@@ -79,13 +84,53 @@ func main() {
 	}
 }
 
+const runUsage = `Usage:
+  roxy run -a                    Run all services from roxy.yaml
+  roxy run <service>             Run a single service from roxy.yaml
+  roxy run "<command>" [flags]   Run command with auto port/domain
+
+Flags:
+  -a, --all              Run all services from roxy.yaml
+  -d, --detach           Run in the background (detached mode)
+  -p, --port <n>         Start scanning from this port (default: 3000)
+  -n, --name <name>      Override subdomain name
+  --tls                  Enable HTTPS for this process
+  --listen-port <n>      TCP mode: proxy listens on this port, forwards to service`
+
+const stopUsage = `Usage:
+  roxy stop <id|domain>...       Stop one or more routes
+  roxy stop -a [--remove-dns]    Stop all routes and proxy
+
+Flags:
+  -a, --all          Stop all routes and the proxy
+  --remove-dns       Also remove DNS resolver configuration (with -a)`
+
+const logsUsage = `Usage:
+  roxy logs <id|domain>          Tail logs for a detached process`
+
+const proxyUsage = `Usage:
+  roxy proxy start [flags]       Start the proxy server
+  roxy proxy stop                Stop the proxy server
+  roxy proxy restart [flags]     Restart the proxy server
+  roxy proxy status              Show proxy status
+  roxy proxy logs [-a] [-w]      View proxy logs
+
+Flags:
+  -d, --detach           Run proxy in the background (default)
+  --no-detach            Run proxy in the foreground
+  --proxy-port <n>       HTTP proxy port (default: 80)
+  --https-port <n>       HTTPS proxy port (default: 443)
+  --dns-port <n>         DNS server port (default: 1299)
+  --tls                  Enable HTTPS`
+
 func runCommand(args []string) error {
-	opts := cmd.RunOptions{
-		StartPort: 3000,
-	}
+	opts := cmd.RunOptions{}
+	runAll := false
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
+		case "-a", "--all":
+			runAll = true
 		case "-p", "--port":
 			if i+1 >= len(args) {
 				die("--port requires a value")
@@ -118,6 +163,16 @@ func runCommand(args []string) error {
 			}
 			i++
 			opts.ID = args[i]
+		case "--listen-port":
+			if i+1 >= len(args) {
+				die("--listen-port requires a value")
+			}
+			i++
+			p, err := strconv.Atoi(args[i])
+			if err != nil {
+				die("invalid listen port: " + args[i])
+			}
+			opts.ListenPort = p
 		default:
 			if opts.Command == "" {
 				opts.Command = args[i]
@@ -127,8 +182,39 @@ func runCommand(args []string) error {
 		}
 	}
 
+	// roxy run -a / roxy run --all
+	if runAll {
+		cfg, _ := config.LoadRoxyYAML(".")
+		if cfg == nil {
+			die("no roxy.yaml found in current directory")
+		}
+		return cmd.RunAll(cfg, opts.Detach)
+	}
+
+	// roxy run (no args) -> show usage
+	if opts.Command == "" && len(args) == 0 {
+		die(runUsage)
+	}
+
+	// If no command given, show usage.
 	if opts.Command == "" {
-		die("usage: roxy run \"<command>\" [-p <number>] [-n <name>] [--tls] [-d]")
+		die(runUsage)
+	}
+
+	// Single word (no spaces) -> must be a service name from roxy.yaml.
+	if !strings.Contains(opts.Command, " ") {
+		cfg, _ := config.LoadRoxyYAML(".")
+		if cfg == nil {
+			die(fmt.Sprintf("unknown service %q (no roxy.yaml found)\n\n%s", opts.Command, runUsage))
+		}
+		if svc, ok := cfg.Services[opts.Command]; ok {
+			return cmd.RunService(opts.Command, svc, opts.Detach)
+		}
+		names := make([]string, 0, len(cfg.Services))
+		for name := range cfg.Services {
+			names = append(names, name)
+		}
+		die(fmt.Sprintf("unknown service %q in roxy.yaml (available: %s)", opts.Command, strings.Join(names, ", ")))
 	}
 
 	return cmd.Run(opts)
@@ -149,7 +235,7 @@ func stopCommand(args []string) error {
 	}
 
 	if !opts.All && len(opts.Targets) == 0 {
-		die("usage: roxy stop <id|domain>... or roxy stop -a [--remove-dns]")
+		die(stopUsage)
 	}
 
 	return cmd.Stop(opts)
@@ -158,7 +244,7 @@ func stopCommand(args []string) error {
 // proxyCommand handles proxy subcommands.
 func proxyCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: roxy proxy <start|stop|restart|status|logs>")
+		die(proxyUsage)
 	}
 
 	subArgs := args[1:]
@@ -247,7 +333,8 @@ func proxyCommand(args []string) error {
 	case "restart":
 		return cmd.ProxyRestart(opts)
 	default:
-		return fmt.Errorf("unknown proxy command: %s (expected start, stop, restart, status, or logs)", args[0])
+		die(fmt.Sprintf("unknown proxy command: %s\n\n%s", args[0], proxyUsage))
+		return nil
 	}
 }
 

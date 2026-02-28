@@ -13,22 +13,28 @@ import (
 
 // Run spawns the command with PORT set, tracks the route, and
 // handles cleanup on exit or signal.
-func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, store *config.Store, configDir string, logFile string) error {
+func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, listenPort int, store *config.Store, configDir string, logFile string) error {
 	// Setup signal handling
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(sigChan)
 
+	routeType := "http"
+	if listenPort > 0 {
+		routeType = "tcp"
+	}
+
 	// Track route (the proxy watches routes.json for changes)
 	if err := store.AddRoute(config.Route{
-		ID:      id,
-		Domain:  domain,
-		Port:    port,
-		Type:    "http",
-		TLS:     tlsEnabled,
-		Command: cmdStr,
-		LogFile: logFile,
-		Created: time.Now(),
+		ID:         id,
+		Domain:     domain,
+		Port:       port,
+		ListenPort: listenPort,
+		Type:       routeType,
+		TLS:        tlsEnabled,
+		Command:    cmdStr,
+		LogFile:    logFile,
+		Created:    time.Now(),
 	}); err != nil {
 		return fmt.Errorf("failed to register route: %w", err)
 	}
@@ -37,20 +43,20 @@ func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, sto
 	cleanup := func() {
 		if err := store.RemoveRoute(domain); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to remove route: %v\n", err)
-		// Commented out until we add a flag to make the proxy ephemeral
-		// 	return
-		// }
+			// Commented out until we add a flag to make the proxy ephemeral
+			// 	return
+			// }
 
-		// // Auto-stop proxy when last route exits
-		// routes, err := store.LoadRoutes()
-		// if err == nil && len(routes) == 0 {
-		// 	pid := proxy.ReadPid(configDir)
-		// 	if pid != 0 {
-		// 		if proc, err := os.FindProcess(pid); err == nil {
-		// 			_ = proc.Signal(syscall.SIGTERM)
-		// 			proxy.RemovePidFile(configDir)
-		// 		}
-		// 	}
+			// // Auto-stop proxy when last route exits
+			// routes, err := store.LoadRoutes()
+			// if err == nil && len(routes) == 0 {
+			// 	pid := proxy.ReadPid(configDir)
+			// 	if pid != 0 {
+			// 		if proc, err := os.FindProcess(pid); err == nil {
+			// 			_ = proc.Signal(syscall.SIGTERM)
+			// 			proxy.RemovePidFile(configDir)
+			// 		}
+			// 	}
 		}
 	}
 	defer cleanup()

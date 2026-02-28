@@ -2,3 +2,4 @@ docs
 dist
 .env
 .DS_Store
+roxy.yaml
