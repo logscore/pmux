@@ -41,8 +41,8 @@ func Run(opts RunOptions) error {
 	}
 
 	// Auto-configure DNS resolver on first run
-	if !platform.ResolverConfigured(p, paths) {
-		if err := platform.ConfigureResolver(p, paths); err != nil {
+	if !platform.ResolverConfigured(p, paths, 1299) {
+		if err := platform.ConfigureResolver(p, paths, 1299); err != nil {
 			return fmt.Errorf("failed to configure DNS resolver: %w", err)
 		}
 		fmt.Println("done - DNS configured")
@@ -51,11 +51,10 @@ func Run(opts RunOptions) error {
 
 	// Auto-start proxy if not running
 	if !proxy.IsRunning(paths.ConfigDir) {
-		// fmt.Println("starting proxy...")
-		if err := ProxyStart(ProxyOptions{HTTPPort: 80, TLS: true, HTTPSPort: 443}); err != nil {
+		if err := ProxyStart(ProxyOptions{HTTPPort: 80, TLS: true, HTTPSPort: 443, DNSPort: 5353}); err != nil {
 			return fmt.Errorf("failed to start proxy: %w", err)
 		}
-		for i := 0; i < proxy.ProxyStartRetries; i++ {
+		for range proxy.ProxyStartRetries {
 			time.Sleep(proxy.ProxyStartRetryInterval)
 			if proxy.IsRunning(paths.ConfigDir) {
 				break
@@ -71,7 +70,7 @@ func Run(opts RunOptions) error {
 		caCertPath := paths.CertsDir + "/ca-cert.pem"
 		if !platform.CATrusted(p, caCertPath) {
 			// The proxy generates certs on startup, wait for the CA cert to appear
-			for i := 0; i < 30; i++ {
+			for range 30 {
 				if _, err := os.Stat(caCertPath); err == nil {
 					break
 				}

@@ -49,6 +49,7 @@ type Route struct {
 type Server struct {
 	httpAddr   string
 	httpsAddr  string
+	dnsPort    int
 	tlsEnabled bool
 	certsDir   string
 	routesFile string
@@ -65,6 +66,7 @@ type Server struct {
 type Options struct {
 	HTTPPort   int
 	HTTPSPort  int
+	DNSPort    int
 	TLS        bool
 	CertsDir   string
 	RoutesFile string
@@ -79,9 +81,14 @@ func New(opts Options) *Server {
 		opts.HTTPSPort = 443
 	}
 
+	if opts.DNSPort == 0 {
+		opts.DNSPort = 53
+	}
+
 	return &Server{
 		httpAddr:     fmt.Sprintf(":%d", opts.HTTPPort),
 		httpsAddr:    fmt.Sprintf(":%d", opts.HTTPSPort),
+		dnsPort:      opts.DNSPort,
 		tlsEnabled:   opts.TLS,
 		certsDir:     opts.CertsDir,
 		routesFile:   opts.RoutesFile,
@@ -96,9 +103,9 @@ func (s *Server) Run() error {
 	}
 
 	// Start built-in DNS server
-	dnsServer, err := roxydns.Start()
+	dnsServer, err := roxydns.Start(s.dnsPort)
 	if err != nil {
-		log.Printf("warning: failed to start DNS server: %v (is port 53 in use?)", err)
+		log.Printf("warning: failed to start DNS server: %v (is port %d in use?)", err, s.dnsPort)
 	}
 
 	// Start HTTP server
@@ -215,7 +222,7 @@ func (s *Server) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	upstream := fmt.Sprintf("localhost:%d", matched.Port)
+	upstream := fmt.Sprintf("127.0.0.1:%d", matched.Port)
 
 	// WebSocket upgrades bypass httputil.ReverseProxy entirely.
 	// Go's HTTP transport can corrupt WebSocket frames (RSV1 errors),

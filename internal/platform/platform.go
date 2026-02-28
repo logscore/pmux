@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 type Platform string
@@ -52,24 +53,58 @@ func GetPaths(p Platform) Paths {
 	}
 }
 
-// ResolverConfigured checks if the OS DNS resolver is pointed at our DNS server.
-func ResolverConfigured(p Platform, paths Paths) bool {
-	_, err := os.Stat(paths.ResolverPath)
-	return err == nil
+// ResolverConfigured checks if the OS DNS resolver is pointed at our DNS server
+// on the expected port.
+func ResolverConfigured(p Platform, paths Paths, dnsPort int) bool {
+	if dnsPort == 0 {
+		dnsPort = 53
+	}
+
+	data, err := os.ReadFile(paths.ResolverPath)
+	if err != nil {
+		return false
+	}
+
+	content := string(data)
+
+	switch p {
+	case PlatformDarwin:
+		// Check that nameserver line exists
+		if !strings.Contains(content, "nameserver 127.0.0.1") {
+			return false
+		}
+		// If non-standard port, check the port directive is present and correct
+		if dnsPort != 53 {
+			return strings.Contains(content, fmt.Sprintf("port %d", dnsPort))
+		}
+		// Standard port: make sure there's no port override
+		return !strings.Contains(content, "port ")
+	case PlatformLinux:
+		if dnsPort != 53 {
+			return strings.Contains(content, fmt.Sprintf("DNS=127.0.0.1:%d", dnsPort))
+		}
+		return strings.Contains(content, "DNS=127.0.0.1")
+	}
+
+	return false
 }
 
-// ConfigureResolver sets up the OS to send .test queries to 127.0.0.1.
+// ConfigureResolver sets up the OS to send .test queries to 127.0.0.1 on the given port.
 // This requires sudo and will prompt the user for their password.
-func ConfigureResolver(p Platform, paths Paths) error {
+func ConfigureResolver(p Platform, paths Paths, dnsPort int) error {
+	if dnsPort == 0 {
+		dnsPort = 53
+	}
+
 	fmt.Println("roxy needs to configure DNS so .test domains resolve locally.")
 	fmt.Println("This is a one-time setup that requires your password.")
 	fmt.Println()
 
 	switch p {
 	case PlatformDarwin:
-		return configureDarwin(paths)
+		return configureDarwin(paths, dnsPort)
 	case PlatformLinux:
-		return configureLinux(paths)
+		return configureLinux(paths, dnsPort)
 	}
 	return nil
 }
@@ -88,10 +123,15 @@ func RemoveResolver(p Platform, paths Paths) error {
 	return nil
 }
 
-func configureDarwin(paths Paths) error {
+func configureDarwin(paths Paths, dnsPort int) error {
+	content := "nameserver 127.0.0.1"
+	if dnsPort != 53 {
+		content += fmt.Sprintf("\nport %d", dnsPort)
+	}
+
 	cmd := exec.Command("sudo", "sh", "-c",
-		fmt.Sprintf("mkdir -p %s && echo 'nameserver 127.0.0.1' > %s",
-			filepath.Dir(paths.ResolverPath), paths.ResolverPath))
+		fmt.Sprintf("mkdir -p %s && printf '%%s\\n' '%s' > %s",
+			filepath.Dir(paths.ResolverPath), content, paths.ResolverPath))
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -146,10 +186,13 @@ func TrustCA(p Platform, caCertPath string) error {
 	return nil
 }
 
-func configureLinux(paths Paths) error {
-	conf := `[Resolve]
-DNS=127.0.0.1
-Domains=~test`
+func configureLinux(paths Paths, dnsPort int) error {
+	dnsAddr := "127.0.0.1"
+	if dnsPort != 53 {
+		dnsAddr = fmt.Sprintf("127.0.0.1:%d", dnsPort)
+	}
+
+	conf := fmt.Sprintf("[Resolve]\nDNS=%s\nDomains=~test", dnsAddr)
 
 	cmd := exec.Command("sudo", "sh", "-c",
 		fmt.Sprintf("mkdir -p %s && echo '%s' > %s && systemctl restart systemd-resolved",

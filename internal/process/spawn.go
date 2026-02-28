@@ -40,7 +40,6 @@ func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, sto
 			fmt.Fprintf(os.Stderr, "warning: failed to remove route: %v\n", err)
 			return
 		}
-		// fmt.Println("done - route removed")
 
 		// Auto-stop proxy when last route exits
 		routes, err := store.LoadRoutes()
@@ -50,7 +49,6 @@ func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, sto
 				if proc, err := os.FindProcess(pid); err == nil {
 					_ = proc.Signal(syscall.SIGTERM)
 					proxy.RemovePidFile(configDir)
-					// fmt.Println("done - proxy stopped (no routes remaining)")
 				}
 			}
 		}
@@ -84,7 +82,6 @@ func Run(id string, cmdStr string, port int, domain string, tlsEnabled bool, sto
 
 	select {
 	case sig := <-sigChan:
-		// fmt.Printf("\nReceived %v, cleaning up...\n", sig)
 		_ = cmd.Process.Signal(sig)
 
 		// If a second signal arrives during cleanup, force-kill the process

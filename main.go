@@ -16,6 +16,7 @@ Usage:
   roxy stop <id|domain>...       Stop one or more routes
   roxy stop -a [--remove-dns]    Stop all routes and proxy
   roxy logs <id|domain>          Tail logs for a detached process
+  roxy proxy <start|stop|restart> [flags]  Manage the proxy server
 
 Run flags:
   -d, --detach       Run in the background (detached mode)
@@ -25,7 +26,15 @@ Run flags:
 
 Stop flags:
   -a, --all          Stop all routes and the proxy
-  --remove-dns       Also remove DNS resolver configuration (with -a)`
+  --remove-dns       Also remove DNS resolver configuration (with -a)
+
+Proxy flags:
+  -d, --detach			 Run proxy in the background (default for proxy start|stop)
+  --no-detach            Run proxy in the foreground
+  --proxy-port <n>       HTTP proxy port (default: 80)
+  --https-port <n>       HTTPS proxy port (default: 443)
+  --dns-port <n>         DNS server port (default: 1299)
+  --tls                  Enable HTTPS`
 
 func main() {
 	args := os.Args[1:]
@@ -53,7 +62,6 @@ func main() {
 		}
 		err = cmd.Logs(args[1])
 
-	// Internal commands (not shown in help)
 	case "proxy":
 		err = proxyCommand(args[1:])
 
@@ -147,25 +155,32 @@ func stopCommand(args []string) error {
 	return cmd.Stop(opts)
 }
 
-// proxyCommand handles internal proxy subcommands (not user-facing).
+// proxyCommand handles proxy subcommands.
 func proxyCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: roxy proxy <run|stop>")
+		return fmt.Errorf("usage: roxy proxy <start|stop|restart>")
 	}
 
 	opts := cmd.ProxyOptions{
 		HTTPPort:  80,
 		HTTPSPort: 443,
+		DNSPort:   1299,
+		Detach:    true, // default to detached for start/restart
 	}
 
 	subArgs := args[1:]
-	opts.TLS = hasFlag(subArgs, "--tls")
 
 	for i := 0; i < len(subArgs); i++ {
 		switch subArgs[i] {
-		case "--http-port":
+		case "--tls":
+			opts.TLS = true
+		case "-d", "--detach":
+			opts.Detach = true
+		case "--no-detach":
+			opts.Detach = false
+		case "--proxy-port", "--http-port":
 			if i+1 >= len(subArgs) {
-				die("--http-port requires a value")
+				die("--proxy-port requires a value")
 			}
 			i++
 			p, err := strconv.Atoi(subArgs[i])
@@ -183,26 +198,38 @@ func proxyCommand(args []string) error {
 				die("invalid port: " + subArgs[i])
 			}
 			opts.HTTPSPort = p
+		case "--dns-port":
+			if i+1 >= len(subArgs) {
+				die("--dns-port requires a value")
+			}
+			i++
+			p, err := strconv.Atoi(subArgs[i])
+			if err != nil {
+				die("invalid port: " + subArgs[i])
+			}
+			opts.DNSPort = p
+		default:
+			die("unexpected argument: " + subArgs[i])
 		}
 	}
 
 	switch args[0] {
-	case "run":
-		return cmd.ProxyRun(opts)
+	case "start":
+		if !opts.Detach {
+			return cmd.ProxyRun(opts)
+		}
+		if err := cmd.ProxyStart(opts); err != nil {
+			return err
+		}
+		cmd.PrintNonStandardPortNotice(opts)
+		return nil
 	case "stop":
 		return cmd.ProxyStop()
+	case "restart":
+		return cmd.ProxyRestart(opts)
 	default:
-		return fmt.Errorf("unknown proxy command: %s", args[0])
+		return fmt.Errorf("unknown proxy command: %s (expected start, stop, or restart)", args[0])
 	}
-}
-
-func hasFlag(args []string, flag string) bool {
-	for _, a := range args {
-		if a == flag {
-			return true
-		}
-	}
-	return false
 }
 
 func die(msg string) {

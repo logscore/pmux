@@ -20,8 +20,13 @@ type Server struct {
 	upstream string
 }
 
-// Start listens on 127.0.0.1:53 for DNS queries.
-func Start() (*Server, error) {
+// Start listens on 127.0.0.1 for DNS queries on the given port (default 1299).
+func Start(port int) (*Server, error) {
+	if port == 0 {
+		port = 1299
+	}
+
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
 	upstream := findUpstream()
 
 	s := &Server{upstream: upstream}
@@ -30,8 +35,8 @@ func Start() (*Server, error) {
 	mux.HandleFunc("test.", s.handleTest)
 	mux.HandleFunc(".", s.handleForward)
 
-	s.udp = &dns.Server{Addr: "127.0.0.1:53", Net: "udp", Handler: mux}
-	s.tcp = &dns.Server{Addr: "127.0.0.1:53", Net: "tcp", Handler: mux}
+	s.udp = &dns.Server{Addr: addr, Net: "udp", Handler: mux}
+	s.tcp = &dns.Server{Addr: addr, Net: "tcp", Handler: mux}
 
 	errCh := make(chan error, 2)
 	go func() { errCh <- s.udp.ListenAndServe() }()
@@ -57,7 +62,7 @@ done:
 		return nil, fmt.Errorf("dns server startup failed: %v", errs)
 	}
 
-	log.Printf("dns listening on 127.0.0.1:53 (upstream: %s)", upstream)
+	log.Printf("dns listening on %s (upstream: %s)", addr, upstream)
 	return s, nil
 }
 
@@ -128,7 +133,7 @@ func findUpstreamDarwin() string {
 		return "8.8.8.8:53"
 	}
 
-	for _, line := range strings.Split(string(out), "\n") {
+	for line := range strings.SplitSeq(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "nameserver[0]") || strings.HasPrefix(line, "nameserver :") {
 			parts := strings.Fields(line)

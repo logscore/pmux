@@ -100,11 +100,53 @@ roxy stop a2m4l
 
 ### Proxy management
 
-The proxy auto-starts when you run `roxy run`, and spins down when the last roxy process stops.
+The proxy auto-starts when you run `roxy run`, and spins down when the last roxy process stops. You can also manage it directly:
+
+```bash
+roxy proxy start              # start the proxy (detached by default)
+roxy proxy stop               # stop the proxy
+roxy proxy restart             # restart the proxy
+roxy proxy start --no-detach  # run in the foreground (useful for debugging)
+```
+
+| Long | Description |
+|------|-------------|
+| `-d`, `--detach` | Run proxy in the background (default) |
+| `--no-detach` | Run proxy in the foreground |
+| `--proxy-port <n>` | HTTP proxy port (default: 80) |
+| `--https-port <n>` | HTTPS proxy port (default: 443) |
+| `--dns-port <n>` | DNS server port (default: 1299) |
+| `--tls` | Enable HTTPS |
+
+#### Privileged ports
+
+On macOS, unprivileged processes can bind to any port including 80 and 443 if bound on 0.0.0.0, which we do so you can access your domain on the network.
+
+On Linux, ports below 1024 are restricted. If the proxy fails to bind to port 80, you have two options:
+
+**Option 1**: Grant the binary permission to bind to low ports (recommended):
+
+```bash
+sudo setcap cap_net_bind_service=+ep $(which roxy)
+```
+
+**Option 2**: Use a non-standard proxy port:
+
+```bash
+roxy proxy start --proxy-port 8080
+```
+
+When using a non-standard proxy port, you'll need to include the port when accessing dev servers in your browser:
+
+```
+http://feat-auth.my-app.test:8080
+```
+
+The DNS server defaults to port 1299 to avoid conflicts with system DNS services (macOS `mDNSResponder` occupies both port 53 and 5353). To change this, you will need to run `roxy proxy start --dns-port <privileged port>`
 
 ### DNS management
 
-We don't have commands for DNS management yet since the DNS server and proxy are ephemeral. Meaning when the last roxy session closes, both the proxy and the DNS server are cleaned up and removed.
+The DNS server starts and stops with the proxy. The resolver is configured automatically on first run (requires sudo once to write to `/etc/resolver/test` on macOS or systemd-resolved config on Linux).
 
 ### Nuke everything
 
