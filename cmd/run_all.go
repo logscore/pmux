@@ -44,10 +44,21 @@ func RunAll(cfg *config.RoxyConfig, callerOpts RunOptions) error {
 	}
 	sort.Strings(names)
 
+	// --public is not supported with -a/--all. Running one tunnel process per
+	// service causes problems in practice: ngrok's free tier only allows a
+	// single agent at a time, and even where multiple tunnels are technically
+	// allowed the subdomain routing breaks because tunnel hostnames don't match
+	// the *.test domains roxy uses internally. Until we have a single-tunnel
+	// solution that works with the proxy layer, block this combination early.
+	if callerOpts.Public {
+		return fmt.Errorf("--public cannot be used with -a/--all\n  run each service individually: roxy run <service> --public")
+	}
+
 	// If detach mode, just run each service detached via RunService.
 	if callerOpts.Detach {
 		for _, name := range names {
 			svc := cfg.Services[name]
+			// NOTE: callerOpts.Public is always false here (guarded above).
 			if err := RunService(name, svc, callerOpts); err != nil {
 				return fmt.Errorf("service %s: %w", name, err)
 			}

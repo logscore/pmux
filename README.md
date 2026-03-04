@@ -87,6 +87,7 @@ roxy run -d "bun dev"                 # runs in detached mode like docker
 | `-p` | `--port <n>` | Sets the port for the process. Increments from that value if that port is taken |
 | `-n` | `--name <name>` | Override subdomain name |
 |      | `--tls` | Enable HTTPS for this server |
+|      | `--public` | Expose via tunnel (requires configured provider) |
 
 ### List active servers
 
@@ -165,6 +166,41 @@ roxy stop -a --remove-dns # also remove DNS resolver config
 |-------|------|-------------|
 | `-a` | `--all` | Stop all routes and the proxy |
 |      | `--remove-dns` | Also remove DNS resolver configuration (with `-a`) |
+
+### Tunnels (public URLs)
+
+Expose a local dev server to the internet with `--public`:
+
+```bash
+roxy run "npm run dev" --public
+```
+
+This requires a tunnel provider to be installed and configured. Run `roxy tunnel set` to choose one, then `roxy tunnel status` to confirm.
+
+#### Supported providers
+
+| Provider | Install |
+|----------|---------|
+| **ngrok** | [ngrok.com/download](https://ngrok.com/download) |
+| **cloudflared** | [developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) |
+| **bore** | [github.com/ekzhang/bore](https://github.com/ekzhang/bore) — `cargo install bore-cli` |
+
+#### Tunnel commands
+
+```bash
+roxy tunnel set     # choose a tunnel provider (interactive)
+roxy tunnel status  # show configured provider and binary path
+```
+
+Once configured, use `--public` with a single service:
+
+```bash
+roxy run "bun dev" --public           # foreground with tunnel
+roxy run -d "bun dev" --public        # detached; prints local + remote URLs
+roxy run <service> --public           # named service from roxy.yaml
+```
+
+> `--public` cannot be used with `-a`/`--all`. Tunnel providers like ngrok limit you to one active tunnel, and subdomain routing breaks when traffic arrives under a different hostname. Run services individually if you need a public URL.
 
 ## Development
 
