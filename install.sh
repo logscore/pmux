@@ -4,9 +4,9 @@ set -euo pipefail
 REPO="logscore/roxy"
 INSTALL_DIR="/usr/local/bin"
 BINARY="roxy"
+TMPDIR="$(mktemp -d)"
 
-# --- helpers ----------------------------------------------------------------
-
+# helper functions
 die() { echo "error: $*" >&2; exit 1; }
 
 detect_platform() {
@@ -79,8 +79,7 @@ verify_checksum() {
   fi
 }
 
-# --- main -------------------------------------------------------------------
-
+# Main logic
 main() {
   local version="${1:-}"
   local platform
@@ -98,29 +97,27 @@ main() {
     fi
   fi
 
-  local asset="${BINARY}-${os}-${arch}"
+  local asset="${BINARY}_${os}_${arch}.tar.gz"
   local download_url="https://github.com/${REPO}/releases/download/${version}/${asset}"
   local checksums_url="https://github.com/${REPO}/releases/download/${version}/checksums.txt"
 
   echo "Installing roxy ${version} (${os}/${arch})..."
 
-  local tmpdir
-  tmpdir="$(mktemp -d)"
-  trap 'rm -rf "$tmpdir"' EXIT
+  trap 'rm -rf "$TMPDIR"' EXIT
 
   echo "Downloading ${download_url}..."
-  download "$download_url" "${tmpdir}/${asset}"
+  download "$download_url" "${TMPDIR}/${asset}"
 
   echo "Verifying checksum..."
-  verify_checksum "${tmpdir}/${asset}" "$checksums_url" "$asset"
+  verify_checksum "${TMPDIR}/${asset}" "$checksums_url" "$asset"
 
-  chmod +x "${tmpdir}/${asset}"
+  chmod +x "${TMPDIR}/${asset}"
 
   if [ -w "$INSTALL_DIR" ]; then
-    mv "${tmpdir}/${asset}" "${INSTALL_DIR}/${BINARY}"
+    mv "${TMPDIR}/${asset}" "${INSTALL_DIR}/${BINARY}"
   else
     echo "Installing to ${INSTALL_DIR} (requires sudo)..."
-    sudo mv "${tmpdir}/${asset}" "${INSTALL_DIR}/${BINARY}"
+    sudo mv "${TMPDIR}/${asset}" "${INSTALL_DIR}/${BINARY}"
   fi
 
   echo "roxy ${version} installed to ${INSTALL_DIR}/${BINARY}"
