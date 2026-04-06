@@ -3,3 +3,5 @@ dist
 .env
 .DS_Store
 roxy.yaml
+roxy.json
+opencode.json

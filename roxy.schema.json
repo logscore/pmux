@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/logscore/roxy/main/roxy.schema.json",
+  "title": "roxy service config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional schema reference for editor support."
+    },
+    "services": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "$ref": "#/$defs/service"
+      }
+    }
+  },
+  "required": [
+    "services"
+  ],
+  "$defs": {
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cmd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Command to run for this service."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Override subdomain name for this service."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Starting port to scan (same behavior as --port)."
+        },
+        "tls": {
+          "type": "boolean",
+          "description": "Enable HTTPS for this service."
+        },
+        "listen-port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "TCP mode: proxy listens on this port and forwards to service PORT."
+        },
+        "public": {
+          "type": "boolean",
+          "description": "Expose this service with the configured tunnel provider."
+        }
+      },
+      "required": [
+        "cmd"
+      ]
+    }
+  }
+}

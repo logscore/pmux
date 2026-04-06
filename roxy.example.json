@@ -1,0 +1,24 @@
+{
+  "$schema": "./roxy.schema.json",
+  "services": {
+    "web": {
+      "cmd": "bun dev",
+      "name": "cool-webapp",
+      "port": 3030,
+      "tls": false,
+      "public": true
+    },
+    "db": {
+      "cmd": "docker run postgres:16",
+      "name": "postgres",
+      "port": 5432,
+      "listen-port": 5432
+    },
+    "cache": {
+      "cmd": "cd ../clawChan && docker compose up redis",
+      "name": "claw-cache",
+      "port": 6379,
+      "listen-port": 6369
+    }
+  }
+}

@@ -34,7 +34,7 @@ const colorReset = "\x1b[0m"
 // callerOpts carries CLI flags (e.g. --detach, --public) that apply to every service.
 func RunAll(cfg *config.RoxyConfig, callerOpts RunOptions) error {
 	if len(cfg.Services) == 0 {
-		return fmt.Errorf("no services defined in roxy.yaml")
+		return fmt.Errorf("no services defined in roxy.json")
 	}
 
 	// Sort service names for deterministic port assignment and color order.

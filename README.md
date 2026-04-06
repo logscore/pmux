@@ -89,6 +89,29 @@ roxy run -d "bun dev"                 # runs in detached mode like docker
 |      | `--tls` | Enable HTTPS for this server |
 |      | `--public` | Expose via tunnel (requires configured provider) |
 
+### Service config (`roxy.json`)
+
+`roxy run -a` and `roxy run <service>` read `roxy.json` in the current directory. A JSON Schema is included at `roxy.schema.json`.
+
+```json
+{
+  "$schema": "./roxy.schema.json",
+  "services": {
+    "web": {
+      "cmd": "npm run dev",
+      "tls": true,
+      "port": 4000
+    },
+    "redis": {
+      "cmd": "docker run --rm -p $PORT:6379 redis:7",
+      "listen-port": 6379
+    }
+  }
+}
+```
+
+`port` works like the CLI `--port` flag (starting port to scan).
+
 ### List active servers
 
 ```bash
@@ -197,7 +220,7 @@ Once configured, use `--public` with a single service:
 ```bash
 roxy run "bun dev" --public           # foreground with tunnel
 roxy run -d "bun dev" --public        # detached; prints local + remote URLs
-roxy run <service> --public           # named service from roxy.yaml
+roxy run <service> --public           # named service from roxy.json
 ```
 
 > `--public` cannot be used with `-a`/`--all`. Tunnel providers like ngrok limit you to one active tunnel, and subdomain routing breaks when traffic arrives under a different hostname. Run services individually if you need a public URL.
